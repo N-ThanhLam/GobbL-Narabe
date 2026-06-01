@@ -1263,6 +1263,7 @@ function handleHello(conn, msg){
       if(seat.peerId && seat.peerId!==conn.peer){ const old=Net.conns.get(seat.peerId); if(old&&old!==conn){ try{old.close();}catch(e){} } Net.conns.delete(seat.peerId); }
       seat.peerId=conn.peer; seat.conn=conn; Net.conns.set(conn.peer,conn);
       const pl=state.players[seat.idx]; if(pl){ pl.disconnected=0; pl.online=1; pl.cpuProxy=0; pl.cpu=pl.fixedCpu; }
+      Net._lastSeq.set(seat.idx, 0);   // ★再接続でクライアントの _actionSeq は 0 から振り直される。古い seq を覚えたままだと復帰後の最初の数手が seq<=last で黙殺されるため baseline をリセット
       pushLog(`${seat.name} が再接続`);
       safeSend(conn,{type:'welcome',you:seat.idx,token:seat.token,cfg:state.cfg});
       safeSend(conn, projectFor(seat.idx));
@@ -1352,7 +1353,9 @@ function handleClientMessage(msg){
     const m={version:'バージョン不一致（ページ再読込してください）', inprogress:'対戦はすでに進行中です', full:'満席です'}[msg.reason]||'参加できません';
     Net._matchEndedByHost=true; hideReconnect(); toast(m); $('t-err').textContent=m; netLeave(); showScreen('title'); return;
   }
-  if(msg.type==='welcome'){ Net.myPlayerIdx=msg.you; if(msg.token) saveToken(Net.roomCode,msg.token,msg.you); Net.cfg=msg.cfg; hideReconnect(); return; }
+  if(msg.type==='welcome'){ Net.myPlayerIdx=msg.you; if(msg.token) saveToken(Net.roomCode,msg.token,msg.you); Net.cfg=msg.cfg;
+    _lastRenderVer=-1; _wasMyTurn=false; clearSel();   // ★(再)接続直後の state を必ず全再構築させ、切断前の選択状態を破棄（同一verでも盤面が古いまま残るのを防ぐ）
+    hideReconnect(); return; }
   if(msg.type==='lobby'){ Net.cfg=msg.cfg; renderClientLobby(msg); return; }
   if(msg.type==='state'){
     view=msg; Net.myPlayerIdx=msg.you; hideReconnect();
