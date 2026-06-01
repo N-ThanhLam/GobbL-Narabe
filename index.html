@@ -532,9 +532,7 @@
 
   <div class="title-tools">
     <a class="link" id="t-rules">📖 ルールを見る</a>
-    <a class="link" id="t-reset">🧹 通信をリセット</a>
   </div>
-  <p class="muted center" style="margin-top:16px;">通信が一瞬切れても自動で再接続します。相手の回線が切れた時は、再接続するまで盤面を止めて待ちます。<br>調子が悪い時は「通信をリセット」で接続キャッシュを掃除できます。</p>
 </div>
 
 <!-- ============================ LOBBY ============================ -->
@@ -754,18 +752,15 @@ function confirmLeaveToTitle(){
   });
 }
 
-/* ---------- 通信キャッシュ リセット（ネットが不調な時の救済） ---------- */
-function resetNetCache(){
+/* ---------- 通信キャッシュ リセット（部屋を作る・参加する時に自動実行） ---------- */
+function _silentNetReset(){
   try{ netLeave(); }catch(e){}
   try{ clearToken(); }catch(e){}
   // 残存フラグ/接続を完全初期化（半端な状態が次の接続を壊すのを防ぐ）
   Net._connecting=false; Net._reconnecting=false; Net._matchEndedByHost=false; Net._intentional=false;
   Net.mode='none'; Net.hostPlayers=[]; try{Net.conns.clear();}catch(e){} try{Net._lastSeq.clear();}catch(e){}
   state=null; view=null;
-  // PWA の古いキャッシュが悪さする場合の保険（次回読み込みで作り直し）
-  try{ if('caches' in window) caches.keys().then(ks=>ks.forEach(k=>caches.delete(k))); }catch(e){}
   setNet('','—'); $('t-err').textContent='';
-  toast('通信キャッシュをリセットしました');
 }
 /* host権威ロジック(進行/CPU/タイマー)は online-host と solo(オフラインCPU対戦)で共通動作させる */
 function isHostMode(){ return Net.mode==='online-host' || Net.mode==='solo'; }
@@ -2076,9 +2071,8 @@ function roomVal(){ const v=$('t-room').value.trim(); if(v){ try{ localStorage.s
 let _connClickAt=0;
 function connDebounced(){ const now=Date.now(); if(now-_connClickAt<1200) return true; _connClickAt=now; return false; }
 $('t-solo').addEventListener('click', ()=>{ nameVal(); soloEnter(); });
-$('t-host').addEventListener('click', ()=>{ if(connDebounced()) return; const r=roomVal(); if(!r){ $('t-err').textContent='合言葉を入力してください'; return; } $('t-err').textContent=''; netHost({code:r, name:nameVal()}); });
-$('t-join').addEventListener('click', ()=>{ if(connDebounced()) return; const r=roomVal(); if(!r){ $('t-err').textContent='合言葉を入力してください'; return; } $('t-err').textContent=''; netJoin({code:r, name:nameVal()}); });
-$('t-reset').addEventListener('click', ()=>{ confirmDialog({ title:'通信をリセット', msg:'接続情報・再接続トークン・キャッシュを掃除して、クリーンな状態に戻します。対戦中の接続は切れます。', yes:'リセット', no:'やめる', onYes: resetNetCache }); });
+$('t-host').addEventListener('click', ()=>{ if(connDebounced()) return; const r=roomVal(); if(!r){ $('t-err').textContent='合言葉を入力してください'; return; } _silentNetReset(); netHost({code:r, name:nameVal()}); });
+$('t-join').addEventListener('click', ()=>{ if(connDebounced()) return; const r=roomVal(); if(!r){ $('t-err').textContent='合言葉を入力してください'; return; } _silentNetReset(); netJoin({code:r, name:nameVal()}); });
 
 /* タイマー表示は client/host 共通で turnDeadline(epoch ms) から算出（描画専用） */
 let _lastTickSec=0;
