@@ -705,7 +705,7 @@
    通信・再接続・スリープ維持は参考用 L-imiles の設計を踏襲（軽量化版）。
    隠し情報は「公開ビュー射影」で実現: host は各clientへ最上段+封鎖のみ送信。
    =========================================================================== */
-const VERSION = 'gobu-4';   // gobu-4: 商用調リスキン＋ホストセッション/遅延同期/確認・通信リセット
+const VERSION = 'gobu-5';   // gobu-5: 切断復帰の堅牢化（回線切替の即時再接続/名前フォールバック復帰/ポーズ猶予短縮）＋PWA本実装
 const N = 6, NC = N*N;                  // 盤面 6×6 固定
 const $ = id => document.getElementById(id);
 const SIZE_CHAR = ['S','M','L','LL'];   // 駒種(小→大): z0=S z1=M z2=L z3=LL
@@ -1135,7 +1135,7 @@ function scheduleCpuIfNeeded(){
    タイマーを凍結し、復帰時に残り時間を復元する。ホストは猶予後に
    「CPU代行で続行」か「終了」を選べる。
    =========================================================================== */
-const PAUSE_GRACE_MS=45000;     // この時間を超えたらホストに代行/終了オプションを提示
+const PAUSE_GRACE_MS=6000;      // この時間を超えたらホストに代行/終了オプションを提示（不安定回線で長く待たされないよう短め）
 let _pauseRemainingMs=0;
 function humanDisconnected(){ return state.players.filter(p=>p.disconnected && !p.fixedCpu && !p.cpuProxy); }
 function refreshPausedNames(){ state.pausedNames = humanDisconnected().map(p=>p.name); }
@@ -1170,8 +1170,10 @@ function maybeResume(){
 /* ホスト: 猶予後に「CPUで代行して続行」 */
 function hostProxyContinue(){
   if(!isHostMode() || !state) return;
+  const names=humanDisconnected().map(p=>p.name);
   for(const p of humanDisconnected()){ p.cpuProxy=1; p.cpu=1; pushLog(`${p.name} を CPU が代行して続行`); }
   maybeResume();
+  toast(names.length ? `${names.join('・')} を CPU が代行して再開しました` : '対戦を再開しました');
 }
 
 /* ===========================================================================
@@ -1517,10 +1519,12 @@ const Net = {
   _intentional:false, _connecting:false,
   // client reconnect
   _reconnecting:false, _reconnectAttempt:0, _reconnectTimer:null, _reconnectDeadline:0, _reconnectConn:null, _peerUnavail:0, _matchEndedByHost:false,
+  _forceFreshPeer:false,          // 回線切替(Wi-Fi⇄モバイル)時: 死んだ transport を捨て Peer を作り直す
   _connHealthTimer:null, _icePingTimer:null, _fullStateTimer:null,
 };
-const RECONNECT_BACKOFF=[1000,2000,4000,8000], RECONNECT_MAX_MS=45000, RECONNECT_CONN_TIMEOUT=6000;
-const HEALTH_UNSTABLE=15000, HEALTH_RECONNECT=30000, ICE_PING_INT=12000, ICE_ZOMBIE=40000, FULLSTATE_INT=30000;
+// 回線切替/沈黙の検知を高速化（turn制ゲームなので ping 増でも負荷は無視できる）
+const RECONNECT_BACKOFF=[600,1200,2400,4000,6000], RECONNECT_MAX_MS=60000, RECONNECT_CONN_TIMEOUT=6000;
+const HEALTH_UNSTABLE=7000, HEALTH_RECONNECT=13000, ICE_PING_INT=6000, ICE_ZOMBIE=16000, FULLSTATE_INT=20000;
 const RECONNECT_KEY='gobu_reconnect';
 // パケット安全限界（L-imiles踏襲）: 巨大/異常 packet による memory 爆増・Safari freeze を防ぐ。
 const PACKET_SIZE_LIMIT=64*1024;          // 受信パケットの上限サイズ（概算）
@@ -1612,6 +1616,13 @@ function netHost({code,name}){
         $('t-err').textContent='この合言葉は今ホストされています。「参加する」で入室するか、別の合言葉でお試しください。';
         netLeave(); showScreen('title'); return;
       }
+      // ★対戦中の一時エラー（Wi-Fi⇄モバイル切替・回線瞬断など）は卓を畳まない。
+      //   シグナリングへ再接続を試み、DataConnection は client 側の再接続で復旧させる。
+      if(state && state.phase!=='end'){
+        setNet('warn','接続復帰中…');
+        try{ if(Net.peer && !Net.peer.destroyed && Net.peer.disconnected) Net.peer.reconnect(); }catch(e){}
+        return;
+      }
       setNet('bad','エラー: '+(err.type||''));
       $('t-err').textContent='部屋を作れませんでした。少し待って再試行するか、別の合言葉でお試しください。';
       netLeave(); showScreen('title');
@@ -1651,28 +1662,50 @@ function handleHostMessage(conn, msg){
     hostPass(seat.idx,false);
   }
 }
+/* 席が切断中(=空いている human 席)か。CPU代行中(cpuProxy)でも disconnected は立ったままなので復帰対象 */
+function seatDisconnected(seat){
+  if(seat.isHost) return false;
+  if(seat.conn && seat.conn.open) return false;
+  if(seat.peerId==='__off__') return true;
+  const pl=state && state.players[seat.idx];
+  return !!(pl && pl.disconnected);
+}
+/* 切断席へ conn を再着席させて復帰させる（token復帰・名前フォールバック共通） */
+function reseatPlayer(seat, conn, newName){
+  if(seat.peerId && seat.peerId!==conn.peer){ const old=Net.conns.get(seat.peerId); if(old&&old!==conn){ try{old.close();}catch(e){} } Net.conns.delete(seat.peerId); }
+  seat.peerId=conn.peer; seat.conn=conn; Net.conns.set(conn.peer,conn);
+  if(newName){ const nm=String(newName).slice(0,16); if(nm){ seat.name=nm; } }
+  const pl=state.players[seat.idx];
+  if(pl){ pl.disconnected=0; pl.online=1; pl.cpuProxy=0; pl.cpu=pl.fixedCpu; if(newName&&seat.name) pl.name=seat.name; }
+  Net._lastSeq.set(seat.idx, 0);   // ★再接続でクライアントの _actionSeq は 0 から振り直される。古い seq を覚えたままだと復帰後の最初の数手が seq<=last で黙殺されるため baseline をリセット
+  pushLog(`${seat.name} が再接続`);
+  safeSend(conn,{type:'welcome',you:seat.idx,token:seat.token,cfg:state.cfg,session:Net.hostSession});
+  safeSend(conn, projectFor(seat.idx));
+  maybeResume();                 // 全員復帰していれば盤面ポーズを解除して再開
+}
 function handleHello(conn, msg){
   if(msg.ver!==VERSION){ safeSend(conn,{type:'reject',reason:'version'}); setTimeout(()=>{try{conn.close();}catch(e){}},200); return; }
-  // 再接続: token一致席へ復帰（★同一ホストセッションのトークンのみ有効。
-  //   別卓/前回対局の古いトークンは session 不一致で無視＝新規参加として扱われる）
-  if(state && state.phase!=='end' && msg.token && msg.session===Net.hostSession){
+  // ① token一致での復帰（最も確実。★同一ホストセッションのトークンのみ有効。終局画面でも結果表示のため許可）
+  if(state && msg.token && msg.session===Net.hostSession){
     const seat=Net.hostPlayers.find(p=>p.token===msg.token);
-    if(seat){
-      // 旧conn掃除
-      if(seat.peerId && seat.peerId!==conn.peer){ const old=Net.conns.get(seat.peerId); if(old&&old!==conn){ try{old.close();}catch(e){} } Net.conns.delete(seat.peerId); }
-      seat.peerId=conn.peer; seat.conn=conn; Net.conns.set(conn.peer,conn);
-      const pl=state.players[seat.idx]; if(pl){ pl.disconnected=0; pl.online=1; pl.cpuProxy=0; pl.cpu=pl.fixedCpu; }
-      Net._lastSeq.set(seat.idx, 0);   // ★再接続でクライアントの _actionSeq は 0 から振り直される。古い seq を覚えたままだと復帰後の最初の数手が seq<=last で黙殺されるため baseline をリセット
-      pushLog(`${seat.name} が再接続`);
-      safeSend(conn,{type:'welcome',you:seat.idx,token:seat.token,cfg:state.cfg,session:Net.hostSession});
-      safeSend(conn, projectFor(seat.idx));
-      maybeResume();                 // 全員復帰していれば盤面ポーズを解除して再開
-      return;
+    if(seat){ reseatPlayer(seat, conn); return; }
+    // token はあるが一致しない（別卓/古い）→ ②のフォールバックへ流す
+  }
+  // ② フォールバック復帰: 対戦中に切断席があれば、名前一致→無ければ先頭の切断席へ再着席。
+  //    退室でトークンを捨てた／別端末／ストレージ消去でも「参加する」で復帰できる。
+  //    （合言葉のみの簡易セキュリティなので、同室者が空席を引き継ぐ可能性は許容）
+  if(state && state.phase==='play'){
+    const disc=Net.hostPlayers.filter(seatDisconnected);
+    if(disc.length){
+      const want=(msg.name||'').slice(0,16);
+      const seat=disc.find(p=>p.name===want) || disc[0];
+      reseatPlayer(seat, conn, msg.name); return;
     }
+    // 切断席が無い＝全員接続中。本当に進行中で入る隙が無い。
     safeSend(conn,{type:'reject',reason:'inprogress'}); setTimeout(()=>{try{conn.close();}catch(e){}},200); return;
   }
-  // 新規参加（ロビーのみ）
-  if(state && state.phase==='play'){ safeSend(conn,{type:'reject',reason:'inprogress'}); setTimeout(()=>{try{conn.close();}catch(e){}},200); return; }
+  // ③ 新規参加（ロビーのみ）
+  if(state && state.phase==='end'){ safeSend(conn,{type:'reject',reason:'inprogress'}); setTimeout(()=>{try{conn.close();}catch(e){}},200); return; }
   if(Net.hostPlayers.length>=Net.cfg.numPlayers){ safeSend(conn,{type:'reject',reason:'full'}); setTimeout(()=>{try{conn.close();}catch(e){}},200); return; }
   const idx=Net.hostPlayers.length;
   const seat={idx, name:(msg.name||('P'+(idx+1))).slice(0,16), peerId:conn.peer, token:randId(), conn, isHost:false};
@@ -1721,6 +1754,8 @@ function netJoin({code,name}){
     try{ Net.peer=new Peer(undefined,{debug:0}); }catch(e){ setNet('bad','接続失敗'); return; }
     Net.peer.on('open', ()=>connectToHost());
     Net.peer.on('error', err=>{
+      // 対戦中: 部屋が一時的に見つからない＝ホストも回線切替中の可能性。即終了せず再接続ループへ。
+      if(view && view.phase!=='end' && !Net._intentional && !Net._matchEndedByHost){ startClientReconnect('peer-error:'+(err&&err.type)); return; }
       if(err.type==='peer-unavailable'){ setNet('bad','部屋が見つかりません'); $('t-err').textContent='その合言葉の部屋が見つかりません。'; showScreen('title'); netLeave(); return; }
       setNet('bad','エラー: '+(err.type||''));
     });
@@ -1834,8 +1869,10 @@ function giveUpReconnect(){ stopClientReconnect(); setNet('bad','再接続でき
 function hostGoneGiveUp(){ Net._matchEndedByHost=true; stopClientReconnect(); setNet('bad','ホストが退出しました'); showReconnect('ホストが退出しました', true); }
 function ensureClientPeer(){
   return new Promise(res=>{ const p=Net.peer;
-    if(p && !p.destroyed && p.open){ res(p); return; }
-    if(p && !p.destroyed && !p.open){ try{p.reconnect();}catch(e){} let done=false; const fin=ok=>{ if(done)return; done=true; res(ok?p:null); }; const to=setTimeout(()=>fin(p.open),4000); p.on('open',()=>{clearTimeout(to);fin(true);}); p.on('error',()=>{clearTimeout(to);fin(p.open);}); return; }
+    // 回線切替直後は古い WebSocket/ICE が死んでいる。reconnect では復旧しにくいので Peer ごと作り直す。
+    const forceFresh=Net._forceFreshPeer; Net._forceFreshPeer=false;
+    if(!forceFresh && p && !p.destroyed && p.open){ res(p); return; }
+    if(!forceFresh && p && !p.destroyed && !p.open){ try{p.reconnect();}catch(e){} let done=false; const fin=ok=>{ if(done)return; done=true; res(ok?p:null); }; const to=setTimeout(()=>fin(p.open),4000); p.on('open',()=>{clearTimeout(to);fin(true);}); p.on('error',()=>{clearTimeout(to);fin(p.open);}); return; }
     try{ if(p) p.destroy(); }catch(e){}
     let np; try{ np=new Peer(undefined,{debug:0}); }catch(e){ res(null); return; }
     Net.peer=np; let done=false; const fin=ok=>{ if(done)return; done=true; res(ok?np:null); };
@@ -1845,7 +1882,7 @@ function ensureClientPeer(){
 }
 
 /* ---------- 接続健全性モニタ(client) ---------- */
-function startConnHealth(){ stopConnHealth(); if(Net.mode!=='online-client') return; Net._connHealthTimer=setInterval(connHealthTick,5000); }
+function startConnHealth(){ stopConnHealth(); if(Net.mode!=='online-client') return; Net._connHealthTimer=setInterval(connHealthTick,3000); }
 function stopConnHealth(){ if(Net._connHealthTimer){ clearInterval(Net._connHealthTimer); Net._connHealthTimer=null; } }
 function connHealthTick(){
   if(Net.mode!=='online-client' || Net._intentional || Net._reconnecting) return;
@@ -1897,6 +1934,30 @@ window.addEventListener('pageshow', onShow);
 window.addEventListener('freeze', onHide);
 window.addEventListener('resume', onShow);
 window.addEventListener('beforeunload', ()=>{ if(Net.mode!=='none') netLeave(); });
+
+/* ===========================================================================
+   回線切替の即時検知（Wi-Fi⇄モバイル等）— ブラウザの online/offline と
+   NetworkInformation の change を使い、30秒の沈黙検知を待たずに即再接続する。
+   =========================================================================== */
+function kickReconnectNow(reason){
+  if(Net.mode==='online-client'){
+    if(!view || view.phase==='end' || Net._intentional || Net._matchEndedByHost) return;
+    Net._forceFreshPeer=true;                       // 死んだ transport を捨て Peer を作り直す
+    if(Net._reconnecting){
+      Net._reconnectDeadline=Date.now()+RECONNECT_MAX_MS;   // 回線復帰で猶予をリセット（長時間オフライン後も即諦めない）
+      clearTimeout(Net._reconnectTimer); Net._reconnectTimer=null; Net._reconnectAttempt=0; Net._peerUnavail=0;
+      reconnectAttempt();
+    } else {
+      startClientReconnect(reason);
+    }
+  } else if(Net.mode==='online-host'){
+    try{ if(Net.peer && !Net.peer.destroyed && Net.peer.disconnected) Net.peer.reconnect(); }catch(e){}
+    if(state && state.phase==='play') hostBroadcast();
+  }
+}
+window.addEventListener('online',  ()=>{ if(Net.mode==='none') return; setNet('warn','回線復帰 — 再接続中…'); kickReconnectNow('online-event'); });
+window.addEventListener('offline', ()=>{ if(Net.mode==='online-client' && view && view.phase!=='end'){ setNet('warn','オフライン — 回線待ち'); showReconnect('回線が切れました。復帰を待っています…', false); } });
+try{ const ci=navigator.connection; if(ci && ci.addEventListener) ci.addEventListener('change', ()=>{ if(Net.mode!=='none') kickReconnectNow('netinfo-change'); }); }catch(e){}
 
 /* ===========================================================================
    LOBBY UI
@@ -2040,7 +2101,20 @@ function registerSW(){
   if(!('serviceWorker' in navigator)) return;
   const ok = location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1';
   if(!ok) return;                                  // file:// 直開きでは SW 不可（ソロCPUは通常通り動作）
-  try{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){}
+  // 新SWが有効化されたら一度だけ自動リロード（古いキャッシュで固まる“PWA失敗”を防ぐ）。
+  let _swReloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(_swReloaded) return; _swReloaded=true; location.reload(); });
+  try{
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      if(reg.waiting && navigator.serviceWorker.controller){ try{ reg.waiting.postMessage({type:'SKIP_WAITING'}); }catch(e){} }
+      reg.addEventListener('updatefound', ()=>{
+        const nw=reg.installing; if(!nw) return;
+        nw.addEventListener('statechange', ()=>{
+          if(nw.state==='installed' && navigator.serviceWorker.controller){ try{ nw.postMessage({type:'SKIP_WAITING'}); }catch(e){} }
+        });
+      });
+    }).catch(()=>{});
+  }catch(e){}
 }
 function _roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
 function makeIcon(size){                            // iOS の apple-touch-icon は PNG が確実なので canvas 生成
