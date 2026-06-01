@@ -2113,6 +2113,11 @@ function registerSW(){
           if(nw.state==='installed' && navigator.serviceWorker.controller){ try{ nw.postMessage({type:'SKIP_WAITING'}); }catch(e){} }
         });
       });
+      // フォアグラウンドに戻るたびに更新チェック（ホーム画面PWAはナビゲーションが発生せず
+      // ブラウザ自動チェックが走らないケースがあるため、確実に検知する）
+      document.addEventListener('visibilitychange', ()=>{
+        if(document.visibilityState==='visible') reg.update().catch(()=>{});
+      });
     }).catch(()=>{});
   }catch(e){}
 }
