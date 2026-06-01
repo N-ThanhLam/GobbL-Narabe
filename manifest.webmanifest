@@ -1,19 +1,30 @@
 {
   "name": "GobbL-Narabe — ゴブ並べ",
-  "short_name": "GobbL-Narabe",
-  "description": "重ねて隠す読み合いの4連オンライン対戦。ゴブ並べ。",
+  "short_name": "ゴブ並べ",
+  "description": "重ねて隠す読み合いの4連オンライン対戦。合言葉だけで対戦・CPUも補完。",
   "lang": "ja",
   "dir": "ltr",
-  "id": "./gobu-narabe.html",
   "start_url": "./gobu-narabe.html",
   "scope": "./",
+  "id": "./gobu-narabe.html",
   "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#0a0d14",
-  "theme_color": "#0a0d14",
-  "categories": ["games", "board"],
+  "background_color": "#070912",
+  "theme_color": "#070912",
+  "categories": ["games"],
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
   ]
 }
