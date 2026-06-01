@@ -5,7 +5,7 @@
    - アイコン/マニフェスト/PeerJS は cache-first（不変なので高速・省通信）。
    - 新バージョンは CACHE 名を変えるだけで切り替わる。skipWaiting + clients.claim で即適用。
    ============================================================================= */
-const CACHE = 'gobu-narabe-v5';
+const CACHE = 'gobu-narabe-v6';
 
 /* 本体シェル（相対パス＝どの https パス配下でも動く） */
 const SHELL = [
@@ -21,8 +21,11 @@ const EXTERNAL = [
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    // 同一オリジンのシェルは確実に（1つでも失敗するとインストール失敗）
-    await cache.addAll(SHELL);
+    // 同一オリジンのシェルは確実に（{cache:'reload'} でHTTPキャッシュを無視して必ず最新を取得）
+    await Promise.all(SHELL.map(async (url) => {
+      const res = await fetch(new Request(url, { cache: 'reload' }));
+      await cache.put(url, res);
+    }));
     // 外部CDNは失敗しても致命的でないので個別に try（ソロCPUはCDN無しでも動く）
     await Promise.all(EXTERNAL.map(async (url) => {
       try { const res = await fetch(url, { mode: 'no-cors' }); await cache.put(url, res); } catch (e) {}
@@ -66,7 +69,8 @@ self.addEventListener('fetch', (e) => {
     // network-first: オンラインは最新、オフラインはキャッシュ→最終手段で本体HTML
     e.respondWith((async () => {
       try {
-        const res = await fetch(req);
+        // {cache:'no-cache'}: HTTPキャッシュを検証して必ずサーバーに問い合わせる（古い版を掴まない）
+        const res = await fetch(new Request(req, { cache: 'no-cache' }));
         cachePut(req, res.clone());
         return res;
       } catch (err) {
