@@ -1,101 +1,56 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="ゴブ並べ">
   <defs>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Zen+Antique+Soft&display=swap');
-    </style>
-
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0d1428"/>
-      <stop offset="0.55" stop-color="#090d1e"/>
-      <stop offset="1" stop-color="#060810"/>
-    </linearGradient>
-
-    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff4b0"/>
-      <stop offset="0.22" stop-color="#f6d840"/>
-      <stop offset="0.55" stop-color="#d09a1a"/>
-      <stop offset="0.85" stop-color="#b07812"/>
-      <stop offset="1" stop-color="#7a500a"/>
-    </linearGradient>
-
-    <linearGradient id="frameGold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f4d985"/>
-      <stop offset="0.5" stop-color="#d8b44e"/>
-      <stop offset="1" stop-color="#a9842f"/>
-    </linearGradient>
-
-    <radialGradient id="warmGlow" cx="0.5" cy="0.5" r="0.52">
-      <stop offset="0" stop-color="#c8980a" stop-opacity="0.18"/>
-      <stop offset="1" stop-color="#c8980a" stop-opacity="0"/>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&display=swap');</style>
+    <radialGradient id="bg" cx="0.5" cy="0.40" r="0.78">
+      <stop offset="0" stop-color="#172245"/><stop offset="0.5" stop-color="#0b1126"/><stop offset="1" stop-color="#05060f"/>
     </radialGradient>
-
-    <filter id="glitchCyan" x="-14%" y="-14%" width="128%" height="128%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.88 0.028" numOctaves="2" seed="13"/>
-      <feDisplacementMap in="SourceGraphic" scale="18" xChannelSelector="R" yChannelSelector="G"/>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff8d4"/><stop offset="0.17" stop-color="#fce589"/>
+      <stop offset="0.40" stop-color="#efc451"/><stop offset="0.60" stop-color="#d69b25"/>
+      <stop offset="0.82" stop-color="#a8701a"/><stop offset="1" stop-color="#6c460c"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7df8d"/><stop offset="0.5" stop-color="#cda646"/><stop offset="1" stop-color="#946f25"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="0.30" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="0.46" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="warm" cx="0.5" cy="0.45" r="0.55">
+      <stop offset="0" stop-color="#e8b73c" stop-opacity="0.22"/><stop offset="1" stop-color="#e8b73c" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feFlood flood-color="#ffc63a" flood-opacity="0.6"/>
+      <feComposite in2="b" operator="in" result="g"/>
+      <feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-
-    <filter id="glitchMag" x="-14%" y="-14%" width="128%" height="128%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.88 0.028" numOctaves="2" seed="31"/>
-      <feDisplacementMap in="SourceGraphic" scale="18" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>
-
-    <filter id="glitchGold" x="-14%" y="-14%" width="128%" height="128%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.88 0.028" numOctaves="2" seed="7"/>
-      <feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G" result="disp"/>
-      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur"/>
-      <feFlood flood-color="#d4a010" flood-opacity="0.55" result="col"/>
-      <feComposite in="col" in2="blur" operator="in" result="glow"/>
-      <feMerge>
-        <feMergeNode in="glow"/>
-        <feMergeNode in="disp"/>
-      </feMerge>
-    </filter>
-
-    <pattern id="scan" x="0" y="0" width="512" height="4" patternUnits="userSpaceOnUse">
-      <line x1="0" y1="3.5" x2="512" y2="3.5" stroke="#000" stroke-width="1.2" stroke-opacity="0.065"/>
+    <pattern id="scan" width="512" height="4" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="3.4" x2="512" y2="3.4" stroke="#000" stroke-width="1.1" stroke-opacity="0.07"/>
     </pattern>
   </defs>
 
   <rect width="512" height="512" fill="url(#bg)"/>
-  <rect width="512" height="512" fill="url(#warmGlow)"/>
+  <rect width="512" height="512" fill="url(#warm)"/>
   <rect width="512" height="512" fill="url(#scan)"/>
 
-  <rect x="12" y="12" width="488" height="488" rx="64"
-        fill="none" stroke="url(#frameGold)" stroke-width="3.5" opacity="0.72"/>
-  <rect x="21" y="21" width="470" height="470" rx="57"
-        fill="none" stroke="url(#frameGold)" stroke-width="1" opacity="0.28"/>
+  <rect x="14" y="14" width="484" height="484" rx="70" fill="none" stroke="url(#frame)" stroke-width="4" opacity="0.88"/>
+  <rect x="25" y="25" width="462" height="462" rx="58" fill="none" stroke="url(#frame)" stroke-width="1.2" opacity="0.32"/>
+  <polygon points="256,5 267,16 256,27 245,16"  fill="#e3c25c"/>
+  <polygon points="256,507 267,496 256,485 245,496" fill="#e3c25c"/>
+  <polygon points="5,256 16,267 27,256 16,245"  fill="#e3c25c"/>
+  <polygon points="507,256 496,267 485,256 496,245" fill="#e3c25c"/>
 
-  <polygon points="256,5 264,12 256,19 248,12"  fill="#d8b44e" opacity="0.85"/>
-  <polygon points="256,507 264,500 256,493 248,500" fill="#d8b44e" opacity="0.85"/>
-  <polygon points="5,256 12,264 19,256 12,248"  fill="#d8b44e" opacity="0.85"/>
-  <polygon points="507,256 500,264 493,256 500,248" fill="#d8b44e" opacity="0.85"/>
+  <rect x="0" y="150" width="512" height="2.4" fill="#19e0ff" opacity="0.06"/>
+  <rect x="0" y="360" width="512" height="2"   fill="#ff2d6b" opacity="0.06"/>
 
-  <rect x="0" y="148" width="512" height="2.5" fill="#00e0ff" opacity="0.07"/>
-  <rect x="0" y="362" width="512" height="2"   fill="#ff1050" opacity="0.07"/>
-  <rect x="0" y="278" width="512" height="1.5" fill="#00e0ff" opacity="0.04"/>
-
-  <g opacity="0.36" filter="url(#glitchCyan)">
-    <text font-family="'Zen Antique Soft','Noto Sans JP','Hiragino Mincho ProN',serif"
-          font-size="190" font-weight="900" text-anchor="middle" letter-spacing="-12"
-          x="262" y="208" fill="#00ddff">ゴブ</text>
-    <text font-family="'Zen Antique Soft','Noto Sans JP','Hiragino Mincho ProN',serif"
-          font-size="190" font-weight="900" text-anchor="middle" letter-spacing="-12"
-          x="262" y="430" fill="#00ddff">並べ</text>
+  <g font-family="'Dela Gothic One','Reggae One','Hiragino Sans','Yu Gothic',sans-serif" font-size="178" text-anchor="middle" letter-spacing="-12" font-weight="400">
+    <g transform="translate(-7,-4)" fill="#1ad6ff" opacity="0.5"><text x="256" y="214">ゴブ</text><text x="256" y="430">並べ</text></g>
+    <g transform="translate(9,5)" fill="#ff2f6c" opacity="0.5"><text x="256" y="214">ゴブ</text><text x="256" y="430">並べ</text></g>
+    <g transform="translate(3,5)" fill="#140d02" opacity="0.55"><text x="256" y="214">ゴブ</text><text x="256" y="430">並べ</text></g>
+    <g transform="translate(0,0)" fill="url(#gold)" filter="url(#glow)"><text x="256" y="214">ゴブ</text><text x="256" y="430">並べ</text></g>
+    <g transform="translate(0,0)" fill="url(#sheen)"><text x="256" y="214">ゴブ</text><text x="256" y="430">並べ</text></g>
   </g>
 
-  <g opacity="0.42" filter="url(#glitchMag)">
-    <text font-family="'Zen Antique Soft','Noto Sans JP','Hiragino Mincho ProN',serif"
-          font-size="190" font-weight="900" text-anchor="middle" letter-spacing="-12"
-          x="250" y="214" fill="#ff0f50">ゴブ</text>
-    <text font-family="'Zen Antique Soft','Noto Sans JP','Hiragino Mincho ProN',serif"
-          font-size="190" font-weight="900" text-anchor="middle" letter-spacing="-12"
-          x="250" y="436" fill="#ff0f50">並べ</text>
-  </g>
-
-  <text font-family="'Zen Antique Soft','Noto Sans JP','Hiragino Mincho ProN',serif"
-        font-size="190" font-weight="900" text-anchor="middle" letter-spacing="-12"
-        x="256" y="211" fill="url(#gold)" filter="url(#glitchGold)">ゴブ</text>
-  <text font-family="'Zen Antique Soft','Noto Sans JP','Hiragino Mincho ProN',serif"
-        font-size="190" font-weight="900" text-anchor="middle" letter-spacing="-12"
-        x="256" y="433" fill="url(#gold)" filter="url(#glitchGold)">並べ</text>
 </svg>

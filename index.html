@@ -13,8 +13,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GobbL-Narabe">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon-180.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
 <!-- P2P 通信は L-imiles と同じ PeerJS(1.5.4) を流用。gameplay は host 権威の direct DataConnection。 -->
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <!-- タイトルフォント: Rubik Glitch（崩し文字系ディスプレイ書体） -->
@@ -607,8 +608,8 @@
     <p class="muted" id="lb-fillnote" style="margin-top:8px;"></p>
   </div>
   <div class="btns">
-    <button id="lb-leave" class="danger">退室</button>
     <button id="lb-start" class="good">ゲーム開始</button>
+    <button id="lb-leave" class="danger">退室</button>
   </div>
   <p id="lb-wait" class="muted center"></p>
 </div>
@@ -722,8 +723,8 @@
     <div class="winner-list" id="e-winners"></div>
     <table class="score" id="e-score"></table>
     <div class="btns" style="margin-top:16px;">
-      <button id="e-leave" class="danger">タイトルへ</button>
       <button id="e-again" class="good">もう一度</button>
+      <button id="e-leave" class="danger">タイトルへ</button>
     </div>
     <p id="e-wait" class="muted center" style="margin-top:8px;"></p>
   </div>
@@ -738,8 +739,8 @@
     <h2 id="cf-title">確認</h2>
     <p id="cf-msg"></p>
     <div class="btns" style="margin-top:14px;">
-      <button id="cf-no" class="primary">いいえ</button>
       <button id="cf-yes" class="danger">はい</button>
+      <button id="cf-no" class="primary">いいえ</button>
     </div>
   </div>
 </div>
@@ -2281,23 +2282,7 @@ function registerSW(){
     }).catch(()=>{});
   }catch(e){}
 }
-function _roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
-function makeIcon(size){                            // iOS の apple-touch-icon は PNG が確実なので canvas 生成
-  try{
-    const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d');
-    g.fillStyle='#0a0d14'; _roundRect(g,0,0,size,size,size*0.22); g.fill();
-    const m=size*0.12; g.fillStyle='#121622'; _roundRect(g,m,m,size-2*m,size-2*m,size*0.14); g.fill();
-    const a=size*0.22, b=size*0.78, step=(b-a)/3;
-    g.strokeStyle='#252c3e'; g.lineWidth=Math.max(1,size*0.012);
-    for(let i=0;i<=3;i++){ g.beginPath(); g.moveTo(a+step*i,a); g.lineTo(a+step*i,b); g.stroke();
-                           g.beginPath(); g.moveTo(a,a+step*i); g.lineTo(b,a+step*i); g.stroke(); }
-    const cx=a+step*1.5, cy=a+step*1.5;
-    g.beginPath(); g.arc(cx,cy,step*0.95,0,7); g.fillStyle='#4493f8'; g.fill();
-    g.beginPath(); g.arc(cx,cy,step*0.55,0,7); g.fillStyle='#e5484d'; g.fill();
-    return c.toDataURL('image/png');
-  }catch(e){ return null; }
-}
-function setAppleIcon(){ const u=makeIcon(180); if(!u) return; const l=document.querySelector('link[rel="apple-touch-icon"]'); if(l) l.href=u; }
+// apple-touch-icon は静的な金PNG(apple-touch-icon-180.png)を直接使う（旧canvas生成は廃止）。
 function unlockAudioOnce(){ const h=()=>Sound.resume(); ['pointerdown','touchend','keydown'].forEach(ev=>window.addEventListener(ev,h,{passive:true})); }
 
 /* 起動 */
@@ -2309,7 +2294,6 @@ function unlockAudioOnce(){ const h=()=>Sound.resume(); ['pointerdown','touchend
   setNet('','—');
   showScreen('title');
   registerSW();
-  setAppleIcon();
   unlockAudioOnce();
 })();
 </script>

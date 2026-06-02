@@ -5,13 +5,17 @@
    - アイコン/マニフェスト/PeerJS は cache-first（不変なので高速・省通信）。
    - 新バージョンは CACHE 名を変えるだけで切り替わる。skipWaiting + clients.claim で即適用。
    ============================================================================= */
-const CACHE = 'GobbL-Narabe-v9';   // v9: 本体HTMLの実ファイル名 index.html に統一(GH Pages等のルート配信に合わせる)。旧版(GobbL-Narabe.html/gobu-narabe.html)キャッシュを破棄させるため番号を更新。
+const CACHE = 'GobbL-Narabe-v10';  // v10: PNGアイコン(192/512/maskable/apple180)を実ファイル化しシェルに追加。旧SVG単独アイコン版のキャッシュを破棄するため番号を更新。
 
 /* 本体シェル（相対パス＝どの https パス配下でも動く） */
 const SHELL = [
   './index.html',
   './manifest.webmanifest',
   './icon.svg',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-512.png',
+  './apple-touch-icon-180.png',
 ];
 /* 外部CDN（ページ読み込みに必要。オフラインでも解決できるよう保存） */
 const EXTERNAL = [
