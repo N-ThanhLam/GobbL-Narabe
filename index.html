@@ -608,8 +608,8 @@
     <p class="muted" id="lb-fillnote" style="margin-top:8px;"></p>
   </div>
   <div class="btns">
-    <button id="lb-start" class="good">ゲーム開始</button>
     <button id="lb-leave" class="danger">退室</button>
+    <button id="lb-start" class="good">ゲーム開始</button>
   </div>
   <p id="lb-wait" class="muted center"></p>
 </div>
@@ -658,8 +658,8 @@
     <div class="muted" id="pz-msg">プレイヤーが切断しました。再接続するまで盤面は進みません。</div>
     <div class="pause-grace" id="pz-grace"></div>
     <div id="pz-host" class="btns hidden" style="flex-direction:column;">
-      <button id="pz-cpu" class="primary">CPU に任せて続行する</button>
       <button id="pz-end" class="danger">この対戦を終了する</button>
+      <button id="pz-cpu" class="primary">CPU に任せて続行する</button>
     </div>
   </div>
 </div>
@@ -723,8 +723,8 @@
     <div class="winner-list" id="e-winners"></div>
     <table class="score" id="e-score"></table>
     <div class="btns" style="margin-top:16px;">
-      <button id="e-again" class="good">もう一度</button>
       <button id="e-leave" class="danger">タイトルへ</button>
+      <button id="e-again" class="good">もう一度</button>
     </div>
     <p id="e-wait" class="muted center" style="margin-top:8px;"></p>
   </div>
@@ -739,8 +739,8 @@
     <h2 id="cf-title">確認</h2>
     <p id="cf-msg"></p>
     <div class="btns" style="margin-top:14px;">
-      <button id="cf-yes" class="danger">はい</button>
       <button id="cf-no" class="primary">いいえ</button>
+      <button id="cf-yes" class="danger">はい</button>
     </div>
   </div>
 </div>
@@ -1662,8 +1662,8 @@ const Net = {
   _connHealthTimer:null, _icePingTimer:null, _fullStateTimer:null,
 };
 // 回線切替/沈黙の検知を高速化（turn制ゲームなので ping 増でも負荷は無視できる）
-const RECONNECT_BACKOFF=[600,1200,2400,4000,6000], RECONNECT_MAX_MS=60000, RECONNECT_CONN_TIMEOUT=6000;
-const HEALTH_UNSTABLE=7000, HEALTH_RECONNECT=13000, ICE_PING_INT=6000, ICE_ZOMBIE=16000, FULLSTATE_INT=20000;
+const RECONNECT_BACKOFF=[200,500,1000,2000,4000], RECONNECT_MAX_MS=60000, RECONNECT_CONN_TIMEOUT=4000;
+const HEALTH_UNSTABLE=4000, HEALTH_RECONNECT=8000, ICE_PING_INT=3000, ICE_ZOMBIE=10000, FULLSTATE_INT=12000;
 const RECONNECT_KEY='gobbl_reconnect';
 // パケット安全限界（L-imiles踏襲）: 巨大/異常 packet による memory 爆増・Safari freeze を防ぐ。
 const PACKET_SIZE_LIMIT=64*1024;          // 受信パケットの上限サイズ（概算）
@@ -2030,11 +2030,11 @@ function ensureClientPeer(){
     // 回線切替直後は古い WebSocket/ICE が死んでいる。reconnect では復旧しにくいので Peer ごと作り直す。
     const forceFresh=Net._forceFreshPeer; Net._forceFreshPeer=false;
     if(!forceFresh && p && !p.destroyed && p.open){ res(p); return; }
-    if(!forceFresh && p && !p.destroyed && !p.open){ try{p.reconnect();}catch(e){} let done=false; const fin=ok=>{ if(done)return; done=true; res(ok?p:null); }; const to=setTimeout(()=>fin(p.open),4000); p.on('open',()=>{clearTimeout(to);fin(true);}); p.on('error',()=>{clearTimeout(to);fin(p.open);}); return; }
+    if(!forceFresh && p && !p.destroyed && !p.open){ try{p.reconnect();}catch(e){} let done=false; const fin=ok=>{ if(done)return; done=true; res(ok?p:null); }; const to=setTimeout(()=>fin(p.open),2500); p.on('open',()=>{clearTimeout(to);fin(true);}); p.on('error',()=>{clearTimeout(to);fin(p.open);}); return; }
     try{ if(p) p.destroy(); }catch(e){}
     let np; try{ np=new Peer(undefined,{debug:0}); }catch(e){ res(null); return; }
     Net.peer=np; let done=false; const fin=ok=>{ if(done)return; done=true; res(ok?np:null); };
-    const to=setTimeout(()=>fin(np.open),8000); np.on('open',()=>{clearTimeout(to);fin(true);}); np.on('error',()=>{clearTimeout(to);fin(false);});
+    const to=setTimeout(()=>fin(np.open),4000); np.on('open',()=>{clearTimeout(to);fin(true);}); np.on('error',()=>{clearTimeout(to);fin(false);});
     np.on('disconnected',()=>{ if(Net._intentional) return; try{ if(Net.peer&&!Net.peer.destroyed) Net.peer.reconnect(); }catch(e){} });
   });
 }
