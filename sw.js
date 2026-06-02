@@ -5,11 +5,11 @@
    - アイコン/マニフェスト/PeerJS は cache-first（不変なので高速・省通信）。
    - 新バージョンは CACHE 名を変えるだけで切り替わる。skipWaiting + clients.claim で即適用。
    ============================================================================= */
-const CACHE = 'GobbL-Narabe-v8';   // v8: 本体HTMLのファイル名をブランド名 GobbL-Narabe.html に統一。旧版(gobu-narabe.html)キャッシュを破棄させるため番号を更新。
+const CACHE = 'GobbL-Narabe-v9';   // v9: 本体HTMLの実ファイル名 index.html に統一(GH Pages等のルート配信に合わせる)。旧版(GobbL-Narabe.html/gobu-narabe.html)キャッシュを破棄させるため番号を更新。
 
 /* 本体シェル（相対パス＝どの https パス配下でも動く） */
 const SHELL = [
-  './GobbL-Narabe.html',
+  './index.html',
   './manifest.webmanifest',
   './icon.svg',
 ];
@@ -63,7 +63,7 @@ self.addEventListener('fetch', (e) => {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
   const sameOrigin = url.origin === self.location.origin;
-  const isShell = sameOrigin && (req.mode === 'navigate' || url.pathname.endsWith('/GobbL-Narabe.html') || url.pathname.endsWith('GobbL-Narabe.html'));
+  const isShell = sameOrigin && (req.mode === 'navigate' || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/'));
 
   if (isShell) {
     // network-first: オンラインは最新、オフラインはキャッシュ→最終手段で本体HTML
@@ -75,7 +75,7 @@ self.addEventListener('fetch', (e) => {
         return res;
       } catch (err) {
         const hit = await caches.match(req);
-        return hit || (await caches.match('./GobbL-Narabe.html'));
+        return hit || (await caches.match('./index.html'));
       }
     })());
     return;
