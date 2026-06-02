@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#070912">
-<title>GobbL-Narabe — ゴブ並べ</title>
-<meta name="description" content="GobbL-Narabe — ゴブ並べ。重ねて隠す読み合いの4連オンライン対戦。">
+<title>GobbL-Narabe</title>
+<meta name="description" content="GobbL-Narabe。重ねて隠す読み合いの4連オンライン対戦。">
 <!-- ===== PWA: インストール可能・オフライン動作（ソロCPUは完全オフライン） ===== -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="application-name" content="GobbL-Narabe">
@@ -17,6 +17,10 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <!-- P2P 通信は L-imiles と同じ PeerJS(1.5.4) を流用。gameplay は host 権威の direct DataConnection。 -->
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<!-- タイトルフォント: Rubik Glitch（崩し文字系ディスプレイ書体） -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik+Glitch&display=swap" rel="stylesheet">
 <style>
   :root{
     /* ===== 濃紺の漆黒 × 金（ゴールド）— 遊戯王MD/Shadowverse系の高級ダークファンタジー ===== */
@@ -240,6 +244,10 @@
     box-shadow:inset 0 2px 6px #0008;
   }
   input:focus,select:focus{ border-color:var(--gold2); box-shadow:inset 0 2px 6px #0008, 0 0 0 2px rgba(244,217,133,.25); }
+  /* ネイティブの選択肢ポップアップ（人数/ラウンド等）が白背景＝白文字で読めない問題への対策。
+     OS/ブラウザ既定を上書きし、濃紺地＋淡色文字で確実に視認できるようにする。 */
+  select option, select optgroup{ background-color:#11182e; color:var(--text); }
+  select option:checked, select option:hover{ background-color:#243156; color:#fff; }
   label{ color:var(--gold); opacity:.85; letter-spacing:.03em; font-weight:600; }
 
   /* ---------- ★ 立体ゲームボタン（Web感の排除）---------- */
@@ -312,7 +320,7 @@
   }
   #screen-title h1{
     position:relative; z-index:1; margin:6px 0 0; line-height:1.05;
-    font-weight:900; letter-spacing:.04em;
+    font-family:'Rubik Glitch', sans-serif; font-weight:400; letter-spacing:.06em;
     background:linear-gradient(180deg,#fff7df 0%, var(--gold) 38%, var(--gold2) 58%, #8a6a1f 100%);
     -webkit-background-clip:text; background-clip:text; color:transparent;
     -webkit-text-fill-color:transparent;
@@ -500,7 +508,7 @@
 <div id="screen-title" class="screen on">
   <div class="title-stage">
     <div class="title-board" aria-hidden="true"></div>
-    <h1>ゴブ並べ<span class="sub">GobbL-Narabe</span></h1>
+    <h1>GobbL-Narabe</h1>
     <p class="tagline">並べる × <b>重ねて隠す</b> × 読み合い。<br>
       6×6盤の見えない下層を制し、<b>4連</b>で即勝利を狙え。</p>
   </div>
@@ -540,11 +548,6 @@
   <h1 style="font-size:20px;">待機ロビー</h1>
   <p class="muted"><span id="lb-roomlbl">合言葉: </span><b id="lb-room"></b> &nbsp;/&nbsp; <span id="lb-role"></span></p>
   <div class="lobby-banner" id="lb-banner">⚔ <span id="lb-bannernum">—</span> ⚔</div>
-  <div class="card">
-    <h2 style="margin-top:0;">参加者 <span id="lb-count" class="muted"></span></h2>
-    <div id="lb-seats"></div>
-    <p class="muted" id="lb-fillnote" style="margin-top:8px;"></p>
-  </div>
   <div class="card" id="lb-settings">
     <h2 style="margin-top:0;">ゲーム設定</h2>
     <div class="row">
@@ -553,8 +556,14 @@
     </div>
     <div class="row">
       <div><label>制限時間(秒/手)</label><select id="cf-time"></select></div>
+      <div><label>CPUの強さ</label><select id="cf-cpu"></select></div>
     </div>
     <p class="muted" style="margin-top:10px;">盤面 <b>6×6</b> ／ 封鎖 <b>2マス</b> ／ 駒 <b>LL・L・M・S 各3個（計12個）</b> ／ <b>4連で勝利</b> ─ すべて固定。<br>空席は CPU が担当します。先手はランダムです。</p>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0;">参加者 <span id="lb-count" class="muted"></span></h2>
+    <div id="lb-seats"></div>
+    <p class="muted" id="lb-fillnote" style="margin-top:8px;"></p>
   </div>
   <div class="btns">
     <button id="lb-start" class="good">ゲーム開始</button>
@@ -703,7 +712,7 @@
    通信・再接続・スリープ維持は参考用 L-imiles の設計を踏襲（軽量化版）。
    隠し情報は「公開ビュー射影」で実現: host は各clientへ最上段+封鎖のみ送信。
    =========================================================================== */
-const VERSION = 'gobu-5';   // gobu-5: 切断復帰の堅牢化（回線切替の即時再接続/名前フォールバック復帰/ポーズ猶予短縮）＋PWA本実装
+const VERSION = 'gobbl-6';   // gobbl-6: 内部キーを gobu→gobbl にリネーム(旧バージョンとは非互換)。CPU強さ選択(やさしい〜最強/最強=2手読み)＋設定UIの選択肢視認性＋部屋作成衝突メッセージ＋PWAファイル名統一(GobbL-Narabe.html)
 const N = 6, NC = N*N;                  // 盤面 6×6 固定
 const $ = id => document.getElementById(id);
 const SIZE_CHAR = ['S','M','L','LL'];   // 駒種(小→大): z0=S z1=M z2=L z3=LL
@@ -716,7 +725,7 @@ const PCOLORS = ['#e5484d','#4493f8','#46c93a','#f5a623'];
 
 /* ---------- util ---------- */
 function hashSeed(str){ let h=2166136261>>>0; for(let i=0;i<str.length;i++){h^=str.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; }
-function roomIdFor(code){ return 'gobu-'+hashSeed(code.toLowerCase()).toString(16).padStart(8,'0'); }
+function roomIdFor(code){ return 'gobbl-'+hashSeed(code.toLowerCase()).toString(16).padStart(8,'0'); }
 function randId(){ return Math.random().toString(36).slice(2,10); }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('on'),2200); }
@@ -771,7 +780,7 @@ function isHostMode(){ return Net.mode==='online-host' || Net.mode==='solo'; }
    =========================================================================== */
 const Sound = (function(){
   let ctx=null, muted=false;
-  try{ muted = localStorage.getItem('gobu_mute')==='1'; }catch(e){}
+  try{ muted = localStorage.getItem('gobbl_mute')==='1'; }catch(e){}
   function ac(){ if(!ctx){ try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ ctx=null; } } return ctx; }
   function resume(){ const c=ac(); if(c && c.state==='suspended'){ try{ c.resume(); }catch(e){} } }
   function blip(f, t0, dur, type, gain){
@@ -801,7 +810,7 @@ const Sound = (function(){
   return {
     play:(n)=>{ if(muted) return; const f=LIB[n]; if(f) try{ f(); }catch(e){} },
     resume, isMuted:()=>muted,
-    toggle:()=>{ muted=!muted; try{ localStorage.setItem('gobu_mute', muted?'1':'0'); }catch(e){} if(!muted){ resume(); } return muted; }
+    toggle:()=>{ muted=!muted; try{ localStorage.setItem('gobbl_mute', muted?'1':'0'); }catch(e){} if(!muted){ resume(); } return muted; }
   };
 })();
 
@@ -821,7 +830,7 @@ const WINDOWS = (function(){ const W=[]; for(const ln of LINES){ for(let i=0;i+W
    =========================================================================== */
 let state = null;          // 完全状態(host) — clientは持たない
 let view = null;           // ローカル描画用の射影ビュー(host/client共通)
-const DEF = { numPlayers:4, rounds:20, turnTime:45 };   // 封鎖・駒数は固定(BLOCKED/HAND_PER_SIZE)
+const DEF = { numPlayers:4, rounds:20, turnTime:45, cpuLevel:3 };   // 封鎖・駒数は固定(BLOCKED/HAND_PER_SIZE) / cpuLevel:1=やさしい〜4=最強
 
 function topOwner(cell){ return (cell && cell.s.length) ? cell.s[cell.s.length-1].o : null; }
 function topZ(cell){ return (cell && cell.s.length) ? cell.s[cell.s.length-1].z : -1; }
@@ -1106,7 +1115,7 @@ function onTurnTimeout(){
   const p=state.cur;
   // 時間切れ: 合法手があれば自動で1手(CPU思考)、無ければパス
   const pl=state.players[p];
-  if(hasAnyLegal(state.board, pl)){ const a=cpuPick(p); if(a){ hostApply(p,a); return; } }
+  if(hasAnyLegal(state.board, pl)){ const a=cpuPick(p, state.cfg.cpuLevel); if(a){ hostApply(p,a); return; } }
   hostPass(p, true);
 }
 /* CPU/代行席は短い演出ディレイ後に自動着手 */
@@ -1120,7 +1129,7 @@ function scheduleCpuIfNeeded(){
     _cpuScheduled=false;
     if(!isHostMode() || !state || state.phase!=='play' || state.paused || state.cur!==p) return;
     if(!isCpuSeat(state.players[p])) return;   // 間に再接続したら人間に返す
-    if(hasAnyLegal(state.board, state.players[p])){ const a=cpuPick(p); if(a){ hostApply(p,a); return; } }
+    if(hasAnyLegal(state.board, state.players[p])){ const a=cpuPick(p, state.cfg.cpuLevel); if(a){ hostApply(p,a); return; } }
     hostPass(p, false);
   }, 600);
 }
@@ -1229,18 +1238,61 @@ function cpuCandidates(board, p, pl){
   for(let f=0;f<NC;f++){ if(topOwner(board[f])===p){ for(let to=0;to<NC;to++){ if(legalMove(board,p,f,to)) out.push({t:'move',from:f,to}); } } }
   return out;
 }
-function cpuPick(p){
+/* 最上段ボード t 上で owner が4連を完成しているか（即勝ち判定） */
+function topHasWin(t, owner){
+  for(const w of WINDOWS){ let ok=true; for(const i of w){ const c=t[i]; if(c.f||c.o!==owner){ ok=false; break; } } if(ok) return true; }
+  return false;
+}
+/* 次に着手する席（手番順の隣）。深さ2で「相手の最善応手」を読む相手として使う */
+function nextSeat(p){ return (p+1)%state.cfg.numPlayers; }
+/* 最上段ボード上での q の候補手（手持ち枚数は近似で無視＝脅威の過小評価を防ぐ安全側） */
+function topCandidates(t, q){
+  const out=[];
+  for(let i=0;i<NC;i++){ const c=t[i]; if(c.f) continue;
+    if(c.o===null) out.push({t:'drop',z:0,cell:i});            // 空きへ配置
+    else if(c.z<SIZES-1) out.push({t:'drop',z:c.z+1,cell:i});  // 1段上書き
+  }
+  for(let f=0;f<NC;f++){ if(t[f].o===q){ for(let to=0;to<NC;to++){ if(f!==to && !t[to].f && (t[to].o===null || t[to].z<t[f].z)) out.push({t:'move',from:f,to}); } } }
+  return out;
+}
+/* q が1手で到達できる最良評価（=こちらにとっての最大脅威）。深さ2の相手手番。 */
+function bestReplyValue(t, q){
+  const cands=topCandidates(t, q);
+  let best=-Infinity;
+  for(const a of cands){ const u=cpuApply(t, q, a); const v=cpuEval(u, q); if(v>best){ best=v; if(best>=CPU_PAT[WINLEN]) break; } }
+  return best===-Infinity?0:best;
+}
+/* レベル別 CPU 思考。
+   Lv1 やさしい : 即勝ち手だけ拾い、あとはランダム（初心者向け・崩しやすい）
+   Lv2 ふつう   : 1手読み評価（自分の連−相手の脅威）
+   Lv3 つよい   : 1手読み + 相手の即勝ちを強くブロック
+   Lv4 最強     : 2手読み（自手→相手の最善応手）でハメ手・両取りを回避（L-imiles Lv4 踏襲） */
+function cpuPick(p, level){
+  level = clamp((level|0)||DEF.cpuLevel, 1, 4);
   const board=state.board, pl=state.players[p];
   const cands=cpuCandidates(board, p, pl);
   if(!cands.length) return null;
   const t0=cpuTopBoard(board);
+
+  // Lv1: 即勝ちは逃さず、それ以外はランダム
+  if(level===1){
+    const wins=cands.filter(a=>topHasWin(cpuApply(t0,p,a), p));
+    const pool = wins.length?wins:cands;
+    return pool[(Math.random()*pool.length)|0];
+  }
+
+  const opp = nextSeat(p);
+  const replyW = level>=4 ? 1.0 : (level>=3 ? 0.85 : 0);   // 相手応手の重み
   let best=[], bestScore=-Infinity;
   for(const a of cands){
     const t=cpuApply(t0, p, a);
     let sc=cpuEval(t, p);
-    // 駒の節約 + 盤面進行: 小駒から消費(S<M<L)。盤面評価が拮抗する時は
-    // 無為な「移動」より必ず配置を優先する(=手持ちが減り、無制限ラウンドでも
-    // いずれ全消費で終局する)。意味のある移動は評価差が penalty を上回り選ばれる。
+    // 自分が即勝ちでないときだけ相手の応手を読む（Lv3=即勝ちブロック / Lv4=最善応手で減点）
+    if(replyW>0 && sc < CPU_PAT[WINLEN]*0.5){
+      sc -= bestReplyValue(t, opp) * replyW;
+    }
+    // 駒の節約 + 盤面進行: 小駒から消費(S<M<L)。拮抗時は無為な「移動」より配置を優先
+    // （手持ちが減り、無制限ラウンドでもいずれ全消費で終局する）。
     if(a.t==='drop') sc -= a.z*2.0; else sc -= 5.5;
     sc += centerBias(a.t==='drop'?a.cell:a.to)*0.4;
     if(sc>bestScore+1e-6){ bestScore=sc; best=[a]; }
@@ -1520,7 +1572,7 @@ const Net = {
 // 回線切替/沈黙の検知を高速化（turn制ゲームなので ping 増でも負荷は無視できる）
 const RECONNECT_BACKOFF=[600,1200,2400,4000,6000], RECONNECT_MAX_MS=60000, RECONNECT_CONN_TIMEOUT=6000;
 const HEALTH_UNSTABLE=7000, HEALTH_RECONNECT=13000, ICE_PING_INT=6000, ICE_ZOMBIE=16000, FULLSTATE_INT=20000;
-const RECONNECT_KEY='gobu_reconnect';
+const RECONNECT_KEY='gobbl_reconnect';
 // パケット安全限界（L-imiles踏襲）: 巨大/異常 packet による memory 爆増・Safari freeze を防ぐ。
 const PACKET_SIZE_LIMIT=64*1024;          // 受信パケットの上限サイズ（概算）
 const SEND_BUFFER_SOFT_LIMIT=256*1024;    // 送信バッファがこれを超えたら deferred queue に積む
@@ -1597,19 +1649,24 @@ function netHost({code,name}){
     Net._connecting=false;             // 非同期初期化が実際に始まったのでフラグ解除
     if(Net.mode!=='online-host') return;
     try{ Net.peer=new Peer(Net.roomId,{debug:0}); }catch(e){ setNet('bad','作成失敗'); return; }
-    Net.peer.on('open', ()=>{ setNet('ok','待機中（参加を待っています）'); showLobby(); startIcePing(); startFullStateHeartbeat(); startHostTimers(); });
+    Net.peer.on('open', ()=>{
+      // ★退室／別操作の後に遅れて open した古い Peer を生かさない（“ホストの幽霊”が残るのを防ぐ）。
+      if(Net.mode!=='online-host'){ try{ Net.peer && Net.peer.destroy(); }catch(e){} return; }
+      setNet('ok','待機中（参加を待っています）'); showLobby(); startIcePing(); startFullStateHeartbeat(); startHostTimers();
+    });
     Net.peer.on('error', err=>{
       // unavailable-id: 自分の前回Peerがサーバ上で未解放 か、同合言葉で他者が既にホスト中。
-      // 解放待ちを十分にリトライ（回数増・バックオフ延長）してから判定する。
-      if(err.type==='unavailable-id' && retry<6){
+      // 直前に自分が抜けた部屋ならサーバのID解放を数回だけ短く待つ（長時間ハングを避ける）。
+      if(err.type==='unavailable-id' && retry<4){
         try{ Net.peer.destroy(); }catch(e){} Net.peer=null;
-        setNet('warn',`ID解放待ち…(${retry+1}/6)`); setTimeout(()=>createHostPeer(retry+1), 800+retry*600); return;
+        setNet('warn',`前の部屋を解放中…(${retry+1}/4)`); setTimeout(()=>createHostPeer(retry+1), 700+retry*500); return;
       }
       if(err.type==='unavailable-id'){
-        // リトライ枯渇＝ほぼ確実に「同じ合言葉で誰かが既にホスト中」。状態を壊さず参加を促す。
+        // 解放されない＝今その合言葉で誰かが既にホスト中。卓は壊さず、参加へ誘導。
+        netLeave(); showScreen('title');
         setNet('bad','この合言葉は使用中');
-        $('t-err').textContent='この合言葉は今ホストされています。「参加する」で入室するか、別の合言葉でお試しください。';
-        netLeave(); showScreen('title'); return;
+        $('t-err').textContent='「'+code+'」の部屋はすでに使われています。同じ合言葉で「参加する」を押すと入室できます（別の合言葉なら新しく作れます）。';
+        return;
       }
       // ★対戦中の一時エラー（Wi-Fi⇄モバイル切替・回線瞬断など）は卓を畳まない。
       //   シグナリングへ再接続を試み、DataConnection は client 側の再接続で復旧させる。
@@ -1747,11 +1804,14 @@ function netJoin({code,name}){
     Net._connecting=false;             // 非同期初期化が実際に始まったのでフラグ解除
     if(Net.mode!=='online-client') return;
     try{ Net.peer=new Peer(undefined,{debug:0}); }catch(e){ setNet('bad','接続失敗'); return; }
-    Net.peer.on('open', ()=>connectToHost());
+    Net.peer.on('open', ()=>{
+      if(Net.mode!=='online-client'){ try{ Net.peer && Net.peer.destroy(); }catch(e){} return; }   // 退室後に遅れて open した古い Peer を生かさない
+      connectToHost();
+    });
     Net.peer.on('error', err=>{
       // 対戦中: 部屋が一時的に見つからない＝ホストも回線切替中の可能性。即終了せず再接続ループへ。
       if(view && view.phase!=='end' && !Net._intentional && !Net._matchEndedByHost){ startClientReconnect('peer-error:'+(err&&err.type)); return; }
-      if(err.type==='peer-unavailable'){ setNet('bad','部屋が見つかりません'); $('t-err').textContent='その合言葉の部屋が見つかりません。'; showScreen('title'); netLeave(); return; }
+      if(err.type==='peer-unavailable'){ setNet('bad','部屋が見つかりません'); $('t-err').textContent='「'+code+'」の部屋はまだありません。先に「部屋を作る」で開くか、合言葉を確認してください。'; showScreen('title'); netLeave(); return; }
       setNet('bad','エラー: '+(err.type||''));
     });
     Net.peer.on('disconnected', ()=>{ if(Net._intentional) return; try{ if(Net.peer&&!Net.peer.destroyed) Net.peer.reconnect(); }catch(e){} });
@@ -1759,13 +1819,24 @@ function netJoin({code,name}){
   function connectToHost(){
     const conn=Net.peer.connect(Net.roomId,{reliable:true});
     let opened=false;
-    const to=setTimeout(()=>{ if(!opened){ try{conn.close();}catch(e){} setNet('bad','ホスト応答なし'); $('t-err').textContent='ホストに接続できませんでした。'; showScreen('title'); netLeave(); } }, 8000);
+    const to=setTimeout(()=>{ if(!opened){ try{conn.close();}catch(e){} setNet('bad','ホスト応答なし'); $('t-err').textContent='ホストに接続できませんでした。ホストが退室した可能性があります。「部屋を作る」で開き直すか、合言葉を確認してください。'; showScreen('title'); netLeave(); } }, 8000);
     conn.on('open', ()=>{ opened=true; clearTimeout(to); Net.hostConn=conn; conn.__lastRx=Date.now();
       const prev=loadToken(Net.roomCode);
       const hello={type:'hello', ver:VERSION, name:Net.myName};
       if(prev&&prev.token){ hello.token=prev.token; hello.session=prev.session; }
       safeSend(conn,hello);
-      conn.on('data', d=>{ conn.__lastRx=Date.now(); handleClientMessage(d); });
+      // ★接続は開けたのに welcome/lobby が来ない＝相手は応答しない“幽霊ホスト”（退室済みのIDだけ残存）。
+      //   そのまま「参加はできるが操作できない」状態で固まるのを防ぎ、明示エラーでタイトルへ戻す。
+      //   （再接続時は既に view/myPlayerIdx を持つので発火しない）
+      const greetTo=setTimeout(()=>{
+        if(Net._intentional || Net.mode!=='online-client' || Net.hostConn!==conn) return;
+        if(Net.myPlayerIdx<0 && !view){
+          try{conn.close();}catch(e){}
+          setNet('bad','ホスト無応答'); $('t-err').textContent='「'+code+'」の部屋に接続できましたが、ホストから応答がありません。ホストが退室した可能性があります。「部屋を作る」で開き直してください。';
+          showScreen('title'); netLeave();
+        }
+      }, 6000);
+      conn.on('data', d=>{ conn.__lastRx=Date.now(); clearTimeout(greetTo); handleClientMessage(d); });
       conn.on('close', ()=>{ if(Net.hostConn!==conn) return; if(!Net._intentional) startClientReconnect('host-conn-close'); });
       conn.on('error', ()=>{ if(Net.hostConn!==conn) return; if(!Net._intentional) startClientReconnect('host-conn-error'); });
       setNet('ok','接続完了'); startIcePing(); startConnHealth();
@@ -1957,30 +2028,34 @@ try{ const ci=navigator.connection; if(ci && ci.addEventListener) ci.addEventLis
 /* ===========================================================================
    LOBBY UI
    =========================================================================== */
-const CFG_RANGES={ players:[2,3,4], rounds:[10,15,20,25,30,40,50,0], time:[0,15,30,45,60,90] };
-const SETTING_IDS=['cf-players','cf-rounds','cf-time'];
+const CFG_RANGES={ players:[2,3,4], rounds:[10,15,20,25,30,40,50,0], time:[0,15,30,45,60,90], cpu:[1,2,3,4] };
+const SETTING_IDS=['cf-players','cf-rounds','cf-time','cf-cpu'];
 const roundFmt=v=>v===0?'無制限':v;
+const CPU_NAMES={1:'やさしい',2:'ふつう',3:'つよい',4:'最強'};
+const cpuFmt=v=>CPU_NAMES[v]||('Lv'+v);
 function fillSelect(el, arr, val, fmt){ el.innerHTML=''; for(const v of arr){ const o=document.createElement('option'); o.value=v; o.textContent=fmt?fmt(v):v; if(v===val) o.selected=true; el.appendChild(o); } }
 function initSettingsUI(){
   fillSelect($('cf-players'),CFG_RANGES.players,DEF.numPlayers,v=>v+'人');
   fillSelect($('cf-rounds'),CFG_RANGES.rounds,DEF.rounds,roundFmt);
   fillSelect($('cf-time'),CFG_RANGES.time,DEF.turnTime,v=>v===0?'なし':v+'秒');
+  fillSelect($('cf-cpu'),CFG_RANGES.cpu,DEF.cpuLevel,cpuFmt);
   for(const id of SETTING_IDS) $(id).addEventListener('change', onSettingsChange);
 }
 function readSettings(){
-  return { numPlayers:+$('cf-players').value, rounds:+$('cf-rounds').value, turnTime:+$('cf-time').value };
+  return { numPlayers:+$('cf-players').value, rounds:+$('cf-rounds').value, turnTime:+$('cf-time').value, cpuLevel:+$('cf-cpu').value };
 }
 /* ---- 設定の localStorage 永続化 ---- */
-function saveCfg(cfg){ try{ localStorage.setItem('gobu_cfg', JSON.stringify(cfg)); }catch(e){} }
+function saveCfg(cfg){ try{ localStorage.setItem('gobbl_cfg', JSON.stringify(cfg)); }catch(e){} }
 function loadCfg(){
-  try{ const o=JSON.parse(localStorage.getItem('gobu_cfg')||'null'); if(!o||typeof o!=='object') return null;
+  try{ const o=JSON.parse(localStorage.getItem('gobbl_cfg')||'null'); if(!o||typeof o!=='object') return null;
     return { numPlayers:clamp(+o.numPlayers||DEF.numPlayers,2,4),
-      rounds:(+o.rounds>=0?+o.rounds:DEF.rounds), turnTime:(+o.turnTime>=0?+o.turnTime:DEF.turnTime) };
+      rounds:(+o.rounds>=0?+o.rounds:DEF.rounds), turnTime:(+o.turnTime>=0?+o.turnTime:DEF.turnTime),
+      cpuLevel:clamp(+o.cpuLevel||DEF.cpuLevel,1,4) };
   }catch(e){ return null; }
 }
 function applySavedCfgToUI(){
   const c=loadCfg(); if(!c) return;
-  $('cf-players').value=c.numPlayers; $('cf-rounds').value=c.rounds; $('cf-time').value=c.turnTime;
+  $('cf-players').value=c.numPlayers; $('cf-rounds').value=c.rounds; $('cf-time').value=c.turnTime; $('cf-cpu').value=c.cpuLevel;
 }
 function onSettingsChange(){
   if(!isHostMode()) return;        // host / solo のみ編集可
@@ -2007,7 +2082,7 @@ function renderLobby(){
   const cfg=Net.cfg||DEF;
   // 設定値をUIへ反映（client側表示同期）
   if(Net.mode==='online-client'){
-    $('cf-players').value=cfg.numPlayers; $('cf-rounds').value=cfg.rounds; $('cf-time').value=cfg.turnTime;
+    $('cf-players').value=cfg.numPlayers; $('cf-rounds').value=cfg.rounds; $('cf-time').value=cfg.turnTime; $('cf-cpu').value=cfg.cpuLevel||DEF.cpuLevel;
   }
   const solo=(Net.mode==='solo');
   const seats=Net.hostPlayers.length?Net.hostPlayers:(Net._clientSeats||[]);
@@ -2065,8 +2140,8 @@ function soloEnter(){
 /* ===========================================================================
    TITLE actions + countdown ticker
    =========================================================================== */
-function nameVal(){ const v=$('t-name').value.trim()||'名無し'; try{ localStorage.setItem('gobu_name',v);}catch(e){} return v.slice(0,16); }
-function roomVal(){ const v=$('t-room').value.trim(); if(v){ try{ localStorage.setItem('gobu_room',v);}catch(e){} } return v; }
+function nameVal(){ const v=$('t-name').value.trim()||'名無し'; try{ localStorage.setItem('gobbl_name',v);}catch(e){} return v.slice(0,16); }
+function roomVal(){ const v=$('t-room').value.trim(); if(v){ try{ localStorage.setItem('gobbl_room',v);}catch(e){} } return v; }
 /* 接続ボタンの連打デバウンス: 非同期初期化中の二重起動（peer二重生成→接続崩壊）を防ぐ */
 let _connClickAt=0;
 function connDebounced(){ const now=Date.now(); if(now-_connClickAt<1200) return true; _connClickAt=now; return false; }
@@ -2136,8 +2211,8 @@ function unlockAudioOnce(){ const h=()=>Sound.resume(); ['pointerdown','touchend
 
 /* 起動 */
 (function init(){
-  try{ const n=localStorage.getItem('gobu_name'); if(n) $('t-name').value=n; }catch(e){}
-  try{ const r=localStorage.getItem('gobu_room'); if(r) $('t-room').value=r; }catch(e){}
+  try{ const n=localStorage.getItem('gobbl_name'); if(n) $('t-name').value=n; }catch(e){}
+  try{ const r=localStorage.getItem('gobbl_room'); if(r) $('t-room').value=r; }catch(e){}
   initSettingsUI();
   applySavedCfgToUI();
   setNet('','—');

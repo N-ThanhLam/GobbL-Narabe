@@ -1,15 +1,15 @@
 /* =============================================================================
    GobbL-Narabe Service Worker
-   - 単一HTML(gobu-narabe.html)が本体。これと付随資産をキャッシュしてオフライン動作。
+   - 単一HTML(GobbL-Narabe.html)が本体。これと付随資産をキャッシュしてオフライン動作。
    - HTML は network-first（オンライン時は最新を取得→更新反映、オフライン時はキャッシュ）。
    - アイコン/マニフェスト/PeerJS は cache-first（不変なので高速・省通信）。
    - 新バージョンは CACHE 名を変えるだけで切り替わる。skipWaiting + clients.claim で即適用。
    ============================================================================= */
-const CACHE = 'gobu-narabe-v6';
+const CACHE = 'GobbL-Narabe-v8';   // v8: 本体HTMLのファイル名をブランド名 GobbL-Narabe.html に統一。旧版(gobu-narabe.html)キャッシュを破棄させるため番号を更新。
 
 /* 本体シェル（相対パス＝どの https パス配下でも動く） */
 const SHELL = [
-  './gobu-narabe.html',
+  './GobbL-Narabe.html',
   './manifest.webmanifest',
   './icon.svg',
 ];
@@ -63,7 +63,7 @@ self.addEventListener('fetch', (e) => {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
   const sameOrigin = url.origin === self.location.origin;
-  const isShell = sameOrigin && (req.mode === 'navigate' || url.pathname.endsWith('/gobu-narabe.html') || url.pathname.endsWith('gobu-narabe.html'));
+  const isShell = sameOrigin && (req.mode === 'navigate' || url.pathname.endsWith('/GobbL-Narabe.html') || url.pathname.endsWith('GobbL-Narabe.html'));
 
   if (isShell) {
     // network-first: オンラインは最新、オフラインはキャッシュ→最終手段で本体HTML
@@ -75,7 +75,7 @@ self.addEventListener('fetch', (e) => {
         return res;
       } catch (err) {
         const hit = await caches.match(req);
-        return hit || (await caches.match('./gobu-narabe.html'));
+        return hit || (await caches.match('./GobbL-Narabe.html'));
       }
     })());
     return;
