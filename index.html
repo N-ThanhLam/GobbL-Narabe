@@ -498,6 +498,47 @@
   #ov-confirm .ov-box{ max-width:340px; }
   #ov-confirm h2{ margin-top:0; }
   #cf-msg{ color:var(--text); font-size:15px; line-height:1.6; margin:4px 0 4px; }
+
+  /* =======================================================================
+     ★ 直前の手を分かりやすく — 最終更新マス / 移動の導線 / 自分の番の点滅
+     すべて view 由来（追加通信ゼロ）。box-shadow/opacity/transform 中心で低負荷。
+     色の役割: 金=直前に動いた所 / 緑=あなたの番。
+     ======================================================================= */
+  /* 最後に更新されたマス（配置/上書き/移動先）= 金リングが脈動して残る */
+  .cell.lastto::after{
+    content:""; position:absolute; inset:0; border-radius:9px; pointer-events:none; z-index:2;
+    box-shadow:0 0 0 2px var(--gold) inset, 0 0 14px rgba(244,217,133,.45) inset;
+    animation:lastToPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes lastToPulse{ 0%,100%{opacity:.5;} 50%{opacity:1;} }
+  /* 移動元（駒が出ていったマス）= 破線リングで「ここから来た」を明示 */
+  .cell.lastfrom::after{
+    content:""; position:absolute; inset:2px; border-radius:8px; pointer-events:none; z-index:2;
+    border:2px dashed rgba(244,217,133,.75); box-shadow:0 0 10px rgba(244,217,133,.22);
+    animation:lastFromPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes lastFromPulse{ 0%,100%{opacity:.4;} 50%{opacity:.85;} }
+
+  /* 移動の導線（from→to の矢印）。JSがSVGで描画。pointer-events無で操作を妨げない */
+  .moveline{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:4; overflow:visible; }
+  .moveline .ml-line{ fill:none; stroke:var(--gold); stroke-linecap:round; opacity:.92;
+    filter:drop-shadow(0 0 4px rgba(244,217,133,.75)); transition:stroke-dashoffset .55s cubic-bezier(.2,.8,.2,1); }
+  .moveline .ml-head{ fill:var(--gold); filter:drop-shadow(0 0 4px rgba(244,217,133,.75)); }
+  .moveline .ml-dot{ fill:rgba(244,217,133,.22); stroke:var(--gold); }
+
+  /* ★ 自分の番だけ点滅 — 盤面フレーム＋手番バナーを緑で脈動させ、見失わないように */
+  body.is-my-turn .board-wrap{ animation:myTurnFrame 1.25s ease-in-out infinite; }
+  @keyframes myTurnFrame{
+    0%,100%{ border-color:var(--gold3); box-shadow:0 0 0 1px #000 inset, 0 18px 50px -18px #000e, 0 0 26px -6px rgba(244,217,133,.18), inset 0 2px 10px #0009; }
+    50%{ border-color:#7ee59a; box-shadow:0 0 0 1px #000 inset, 0 18px 50px -18px #000e, 0 0 40px 3px rgba(95,208,131,.6), inset 0 2px 10px #0009; }
+  }
+  body.is-my-turn .turnbox{ animation:myTurnBox 1.25s ease-in-out infinite; }
+  @keyframes myTurnBox{
+    0%,100%{ box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 6px 16px -10px #000; }
+    50%{ box-shadow:0 0 0 1px var(--good) inset, inset 0 1px 0 rgba(255,255,255,.06), 0 0 18px -2px rgba(95,208,131,.6); }
+  }
+  body.is-my-turn .turnbox .who{ animation:myTurnWho 1.25s ease-in-out infinite; }
+  @keyframes myTurnWho{ 0%,100%{text-shadow:none;} 50%{text-shadow:0 0 12px rgba(95,208,131,.85);} }
 </style>
 </head>
 <body>
@@ -566,8 +607,8 @@
     <p class="muted" id="lb-fillnote" style="margin-top:8px;"></p>
   </div>
   <div class="btns">
-    <button id="lb-start" class="good">ゲーム開始</button>
     <button id="lb-leave" class="danger">退室</button>
+    <button id="lb-start" class="good">ゲーム開始</button>
   </div>
   <p id="lb-wait" class="muted center"></p>
 </div>
@@ -576,7 +617,7 @@
 <!-- レイアウト: モバイル=縦積み / PC=盤面を左に固定の2カラム(.game-side は mobile では display:contents) -->
 <div id="screen-game" class="screen">
   <div class="game-board">
-    <div class="board-wrap"><div class="board" id="g-board"></div></div>
+    <div class="board-wrap"><div class="board" id="g-board"></div><svg class="moveline" id="g-moveline" aria-hidden="true"></svg></div>
     <div class="hint" id="g-hint"></div>
   </div>
   <div class="game-side">
@@ -681,8 +722,8 @@
     <div class="winner-list" id="e-winners"></div>
     <table class="score" id="e-score"></table>
     <div class="btns" style="margin-top:16px;">
-      <button id="e-again" class="good">もう一度</button>
       <button id="e-leave" class="danger">タイトルへ</button>
+      <button id="e-again" class="good">もう一度</button>
     </div>
     <p id="e-wait" class="muted center" style="margin-top:8px;"></p>
   </div>
@@ -697,8 +738,8 @@
     <h2 id="cf-title">確認</h2>
     <p id="cf-msg"></p>
     <div class="btns" style="margin-top:14px;">
-      <button id="cf-yes" class="danger">はい</button>
       <button id="cf-no" class="primary">いいえ</button>
+      <button id="cf-yes" class="danger">はい</button>
     </div>
   </div>
 </div>
@@ -1346,7 +1387,45 @@ function applyMoveFx(){
   const cells=$('g-board').children;
   if(view.reveal && cells[view.reveal.cell]) cells[view.reveal.cell].classList.add('reveal');
   if(view.changed) for(const i of view.changed){ const cell=cells[i]; if(!cell) continue; const pc=cell.querySelector('.pc'); if(pc) pc.classList.add('fxpop'); }
+  drawMoveLine(true);                        // 移動なら from→to の導線を描画アニメ付きで引く
 }
+/* 移動の導線(from→to)を盤面オーバーレイSVGに描く。view.act==='move' の時だけ。
+   座標は getBoundingClientRect 基準でviewBoxへ写すので、盤面の余白/枠/拡縮に依らず正確。 */
+function drawMoveLine(animate){
+  const svg=$('g-moveline'); if(!svg) return;
+  svg.innerHTML='';
+  if(!view || view.act!=='move' || !view.changed || view.changed.length<2) return;  // 移動以外/初期はクリア
+  const cells=$('g-board').children;
+  const a=cells[view.changed[0]], b=cells[view.changed[1]]; if(!a||!b) return;
+  const sr=svg.getBoundingClientRect(); if(!sr.width||!sr.height) return;
+  const ra=a.getBoundingClientRect(), rb=b.getBoundingClientRect();
+  let x1=ra.left-sr.left+ra.width/2, y1=ra.top-sr.top+ra.height/2;
+  let x2=rb.left-sr.left+rb.width/2, y2=rb.top-sr.top+rb.height/2;
+  svg.setAttribute('viewBox',`0 0 ${sr.width} ${sr.height}`);
+  const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1, ux=dx/len, uy=dy/len, cw=ra.width;
+  const pad=cw*0.30;                         // 端をセル中心から少し控えて駒に被せすぎない
+  x1+=ux*pad; y1+=uy*pad; x2-=ux*pad; y2-=uy*pad;
+  const ns='http://www.w3.org/2000/svg';
+  const mk=(t,at)=>{ const e=document.createElementNS(ns,t); for(const k in at) e.setAttribute(k,at[k]); return e; };
+  const line=mk('line',{x1,y1,x2,y2,class:'ml-line','stroke-width':Math.max(2.5,cw*0.08)});
+  const ah=Math.max(7,cw*0.26), ang=Math.atan2(dy,dx);
+  const head=mk('polygon',{class:'ml-head', points:
+    `${x2},${y2} ${x2-ah*Math.cos(ang-0.42)},${y2-ah*Math.sin(ang-0.42)} ${x2-ah*Math.cos(ang+0.42)},${y2-ah*Math.sin(ang+0.42)}`});
+  const dot=mk('circle',{class:'ml-dot', cx:x1, cy:y1, r:Math.max(3,cw*0.11), 'stroke-width':Math.max(1.5,cw*0.04)});
+  svg.appendChild(line); svg.appendChild(head); svg.appendChild(dot);
+  if(animate){                               // 新しい手の時だけ「線を引く」演出（再描画では静止表示）
+    const tl=(line.getTotalLength&&line.getTotalLength())||len;
+    line.style.strokeDasharray=tl; line.style.strokeDashoffset=tl;
+    head.style.opacity=0; head.style.transition='opacity .25s ease .3s';
+    dot.style.opacity=0;  dot.style.transition='opacity .2s ease';
+    void svg.getBoundingClientRect();        // 1回リフロー → transition発火
+    line.style.strokeDashoffset=0; head.style.opacity=1; dot.style.opacity=1;
+  }
+}
+/* 画面回転/リサイズ時は座標が変わるので導線を引き直す（軽くデバウンス） */
+let _mlResizeT=null;
+window.addEventListener('resize', ()=>{ clearTimeout(_mlResizeT);
+  _mlResizeT=setTimeout(()=>{ if(view && $('screen-game').classList.contains('on')) drawMoveLine(false); }, 150); });
 /* 行動別の効果音（host/soloは即時、clientは状態到着時） */
 function playStateSounds(){
   if(view.paused) return;
@@ -1379,6 +1458,8 @@ function renderTop(){
   $('g-turn').textContent = view.paused ? '一時停止中' : (myTurn() ? 'あなたの番' : (cur? cur.name+' の番' : '—'));
   $('g-turn').style.color = view.paused ? 'var(--warn)' : (myTurn()? 'var(--good)' : 'var(--text)');
   $('g-meta').textContent = `ラウンド ${view.round}/${view.rounds>0?view.rounds:'∞'}`;
+  // 自分の番だけ盤面フレーム/手番バナーを点滅（ポーズ中は止める）。毎描画で同期。
+  document.body.classList.toggle('is-my-turn', myTurn() && !view.paused);
 }
 function renderPlayers(){
   const box=$('g-players'); box.innerHTML='';
@@ -1401,6 +1482,13 @@ function renderBoard(){
     else if(sel.kind==='move'){ for(let i=0;i<NC;i++) if(legalMove(view.board, view.you, sel.from, i)) legalSet.add(i); }
   }
   const winSet = (view.phase==='end') ? endWinCells() : null;   // 終局: 勝利ラインを強調
+  // 直前の手の位置を持続表示: lastTo=最後に更新したマス / lastFrom=移動の出発点。
+  // view 由来なので、選択操作で再描画しても消えず次の手まで残る（追加通信なし）。
+  let lastTo=-1, lastFrom=-1;
+  if(view.phase==='play' && view.changed && view.changed.length){
+    if(view.act==='move' && view.changed.length>=2){ lastFrom=view.changed[0]; lastTo=view.changed[1]; }
+    else if(view.act==='drop' || view.act==='gobble'){ lastTo=view.changed[0]; }
+  }
   for(let i=0;i<NC;i++){
     const c=view.board[i];
     const cell=document.createElement('div');
@@ -1408,6 +1496,8 @@ function renderBoard(){
     if(legalSet.has(i)) cell.className+=' legal';
     if(sel.kind==='move' && sel.from===i) cell.className+=' movefrom';
     if(winSet && winSet.has(i)) cell.className+=' win';
+    if(i===lastTo) cell.className+=' lastto';
+    if(i===lastFrom) cell.className+=' lastfrom';
     // reveal/配置ポップは applyMoveFx() で付与（選択操作の再描画では演出を繰り返さない）
     if(c.s.length){ const t=c.s[c.s.length-1];
       const pc=document.createElement('div'); pc.className=`pc z${t.z} p${t.o}`; pc.textContent=SIZE_CHAR[t.z];
@@ -1541,6 +1631,7 @@ $('e-leave').addEventListener('click', ()=>{ confirmLeaveToTitle(); });
    =========================================================================== */
 function showScreen(name){
   for(const n of ['title','lobby','game']) $('screen-'+n).classList.toggle('on', n===name);
+  if(name!=='game') document.body.classList.remove('is-my-turn');   // 盤面外では手番点滅を消す
 }
 /* rules modal */
 $('t-rules').addEventListener('click', ()=>$('ov-rules').classList.remove('hidden'));
