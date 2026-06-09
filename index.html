@@ -94,6 +94,22 @@
   .pcard .pn .chip{width:15px; height:15px; border-radius:4px;}
   .pcard .hd{color:var(--dim); margin-top:3px; font-variant-numeric:tabular-nums; font-size:13px;}
   .pcard .st{position:absolute; top:7px; right:9px; font-size:12px; font-weight:700;}
+  /* 適応AI: 人格＋構えタグ */
+  .pcard .aitag{margin-top:3px; font-size:11.5px; font-weight:800; color:var(--gold); letter-spacing:.3px;
+    display:inline-block; padding:1px 7px; border-radius:999px; background:rgba(244,217,133,.12); border:1px solid var(--gold-deep);}
+  /* 終局の種明かし: 埋もれた下層ピップ（マス下端に下→上で並ぶ） */
+  .buried{position:absolute; left:4px; right:4px; bottom:3px; display:flex; gap:2px; justify-content:center; pointer-events:none; z-index:2;}
+  .bp{width:7px; height:7px; border-radius:2px; box-shadow:0 0 0 1px rgba(0,0,0,.5);}
+  .bp.p0{background:var(--p0);} .bp.p1{background:var(--p1);} .bp.p2{background:var(--p2);} .bp.p3{background:var(--p3);}
+  /* 宿敵レポート */
+  #e-rival{margin-top:12px; border:1px solid var(--border); border-radius:10px; padding:11px 13px; background:rgba(20,26,44,.6);}
+  #e-rival .rv-head{font-weight:800; color:var(--gold); font-size:14px;}
+  #e-rival .rv-sub{font-size:12.5px; color:var(--dim); margin:3px 0 8px;}
+  #e-rival .rv-row{display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13.5px;}
+  #e-rival .rv-row .chip{width:14px; height:14px; border-radius:4px; flex:none;}
+  #e-rival .rv-nm{flex:1; font-weight:700;}
+  #e-rival .rv-per{font-size:12px; color:var(--text); background:var(--panel3); border:1px solid var(--border); border-radius:999px; padding:1px 8px;}
+  #e-rival .rv-st{font-size:12px; font-weight:800; color:var(--gold2); min-width:42px; text-align:right;}
   .st-online{color:var(--good);} .st-offline{color:var(--bad);} .st-cpu{color:var(--warn);} .st-me{color:var(--accent);}
   /* board */
   .board-wrap{width:100%;}
@@ -565,6 +581,7 @@
     <p class="muted" style="margin:2px 0 0;">部屋を作らずに、すぐ CPU と対戦できます。</p>
     <div class="btns">
       <button id="t-solo" class="good">CPU と対戦する</button>
+      <button id="t-watch" class="ghost" title="全席 CPU で自動進行。盤面の流れを観戦できます。">👁 CPU vs CPU 観戦</button>
     </div>
   </div>
 
@@ -687,8 +704,8 @@
       </ul>
       <h3>駒と盤面</h3>
       <ul>
-        <li>盤面は <b>6×6</b>。封鎖マス <b>2個</b> は配置・移動・上書き不可。</li>
-        <li>駒は <b>LL・L・M・S</b> の4種、各 <b>3個（計12個）</b>。大小は S &lt; M &lt; L &lt; LL。</li>
+        <li>盤面は <b>6×6</b>（2人対戦時は外周封鎖で実質 <b>4×4</b>）。封鎖マスは配置・移動・上書き不可。</li>
+        <li>駒は <b>LL・L・M・S</b> の4種。S×<b>6</b>・M×<b>5</b>・L×<b>4</b>・LL×<b>3</b>（計18個）。大小は S &lt; M &lt; L &lt; LL。</li>
         <li><b>先手はランダム</b>で決まる。</li>
       </ul>
       <h3>手番（いずれか1つ）</h3>
@@ -722,6 +739,7 @@
     <p class="muted" id="e-reason" style="margin:0 0 6px;"></p>
     <div class="winner-list" id="e-winners"></div>
     <table class="score" id="e-score"></table>
+    <div id="e-rival"></div>
     <div class="btns" style="margin-top:16px;">
       <button id="e-leave" class="danger">タイトルへ</button>
       <button id="e-again" class="good">もう一度</button>
@@ -754,14 +772,14 @@
    通信・再接続・スリープ維持は参考用 L-imiles の設計を踏襲（軽量化版）。
    隠し情報は「公開ビュー射影」で実現: host は各clientへ最上段+封鎖のみ送信。
    =========================================================================== */
-const VERSION = 'gobbl-6';   // gobbl-6: 内部キーを gobu→gobbl にリネーム(旧バージョンとは非互換)。CPU強さ選択(やさしい〜最強/最強=2手読み)＋設定UIの選択肢視認性＋部屋作成衝突メッセージ＋PWAファイル名統一(GobbL-Narabe.html)
+const VERSION = 'gobbl-7';   // gobbl-7: 適応型対戦AI(3層判断=必須/戦術/プレイヤー適応)。相手モデル(localStorage gobbl_rival_v1)＋4人格(カウンター/ミラー/実験/混合)＋履歴多様性＋驚き＋学習演出(観察→対策)＋対局横断の宿敵記憶。終局の種明かし(下層公開)＋宿敵レポート。必須層が自滅を禁止し競技性の床を維持。/ gobbl-6: 内部キー gobu→gobbl リネーム＋CPU強さ選択＋PWAファイル名統一
 const N = 6, NC = N*N;                  // 盤面 6×6 固定
 const $ = id => document.getElementById(id);
 const SIZE_CHAR = ['S','M','L','LL'];   // 駒種(小→大): z0=S z1=M z2=L z3=LL
 const SIZE_LABEL = ['小','中','大','特大'];
 const SIZES = SIZE_CHAR.length;         // 4 駒種
 const WINLEN = 4;                       // 4連で勝利
-const HAND_PER_SIZE = 3;                // 各サイズ3個 → 計12個
+const HAND_PER_SIZE = [6,5,4,3];        // S×6 M×5 L×4 LL×3 → 計18個
 const BLOCKED = 2;                      // 封鎖マス 2 固定
 const PCOLORS = ['#e5484d','#4493f8','#46c93a','#f5a623'];
 
@@ -866,6 +884,8 @@ const LINES = (function(){
   return L;
 })();
 const WINDOWS = (function(){ const W=[]; for(const ln of LINES){ for(let i=0;i+WINLEN<=ln.length;i++) W.push(ln.slice(i,i+WINLEN)); } return W; })();
+/* 各マス i が属する勝利窓のインデックス一覧（手の分類・脅威判定を軽量化） */
+const CELL_WINDOWS = (function(){ const M=[]; for(let i=0;i<NC;i++) M.push([]); WINDOWS.forEach((w,wi)=>{ for(const i of w) M[i].push(wi); }); return M; })();
 
 /* ===========================================================================
    STATE & RULES  (host が保持する完全状態。board cell = {f:封鎖, s:[{o,z}...]} )
@@ -905,16 +925,26 @@ function connectedOpen(blk){
   return cnt === (NC - blk.size);
 }
 
+/* 外周リング（6×6盤の1列目/6列目/1行目/6行目）を封鎖→疑似4×4 */
+function genOuterRing(){
+  const blk=new Set();
+  for(let x=0;x<N;x++){ blk.add(x); blk.add((N-1)*N+x); }          // 上下行
+  for(let y=1;y<N-1;y++){ blk.add(y*N); blk.add(y*N+(N-1)); }      // 左右列（角除く）
+  return blk;
+}
+
 /* lobby seats(humans) + config からゲーム新規生成 */
 function newGameState(cfg, seats){
   const board=[]; for(let i=0;i<NC;i++) board.push({f:0,s:[]});
-  for(const i of genBlocked(BLOCKED)) board[i].f=1;
+  // 2人対戦: 外周を全封鎖 → 内側4×4が実質盤面（本来のGobbletsルール）
+  const blockedSet = (cfg.numPlayers===2) ? genOuterRing() : genBlocked(BLOCKED);
+  for(const i of blockedSet) board[i].f=1;
   const players=[];
   for(let i=0;i<cfg.numPlayers;i++){
     const human = seats[i];                 // {name, peerId, token} or undefined
     players.push({
       idx:i, name: human ? human.name : ('CPU '+(i+1)),
-      hand: new Array(SIZES).fill(HAND_PER_SIZE), score:0,    // 各サイズ3個 = 計12個
+      hand: HAND_PER_SIZE.slice(), score:0,    // S×6 M×5 L×4 LL×3 = 計18個
       cpu: human?0:1, disconnected:0, online: human?1:0, fixedCpu: human?0:1, cpuProxy:0
     });
   }
@@ -1014,14 +1044,16 @@ function computeScores(board){
    =========================================================================== */
 function projectFor(youIdx){
   const b=state.board, board=[];
+  const _reveal = state.phase==='end';            // 終局のみ全スタック公開＝隠し下層の“種明かし”
   for(let i=0;i<NC;i++){ const c=b[i];
-    // 描画/合法判定の互換のため s は「最上段だけ」を持つ薄い配列に射影する
-    board.push({ f:c.f, s: c.s.length ? [c.s[c.s.length-1]] : [] });
+    // 描画/合法判定の互換のため s は通常「最上段だけ」を持つ薄い配列に射影する（終局は全層）
+    board.push({ f:c.f, s: _reveal ? c.s.map(x=>({o:x.o,z:x.z})) : (c.s.length ? [c.s[c.s.length-1]] : []) });
   }
   const players = state.players.map(p=>({
     idx:p.idx, name:p.name, hand:p.hand.slice(), score:p.score,
     state: p.idx===youIdx ? 'me'
-         : (p.fixedCpu||p.cpuProxy ? 'cpu' : (p.disconnected ? 'offline' : (p.online?'online':'cpu')))
+         : (p.fixedCpu||p.cpuProxy ? 'cpu' : (p.disconnected ? 'offline' : (p.online?'online':'cpu'))),
+    aiTag: (p.fixedCpu||p.cpuProxy) ? AB.tag(p.idx) : ''   // 適応AIの人格＋構え（学習演出）
   }));
   return { type:'state', ver:state.ver, phase:state.phase, cfg:state.cfg, you:youIdx,
            cur:state.cur, round:state.round, rounds:state.cfg.rounds,
@@ -1051,6 +1083,7 @@ function hostStartGame(cfg){
       if(pl && (!hp.conn || hp.conn.open===false)){ pl.disconnected=1; pl.online=0; }
     }
   }
+  AB.start();                                    // 適応AI: CPU席へ人格割当＋相手モデル準備
   pushLog('ゲーム開始！ 6×6 / 封鎖'+BLOCKED+' / 4連勝利 / 最大'+(cfg.rounds>0?cfg.rounds:'∞')+'ラウンド');
   pushLog('先手: '+state.players[state.cur].name);
   // 切断席があれば即ポーズして再接続を待つ（タイマー有でも勝手に進めない）
@@ -1090,8 +1123,10 @@ function hostApply(p, action){
   if(!state || state.phase!=='play') return;
   if(state.paused) return;                    // 切断ポーズ中は一切進行させない
   if(p!==state.cur) return;                  // 手番違いは無視
+  const _obsT0 = (!isCpuSeat(state.players[p])) ? cpuTopBoard(state.board) : null;   // 観測用: 着手前の最上段
   const ev = applyAction(p, action);
   if(!ev.ok){ if(p===Net.myPlayerIdx){ toast('その手は打てません'); Sound.play('illegal'); } return; }
+  if(_obsT0) AB.observe(p, action, _obsT0);     // 人間の手だけ観測（適応AIの相手モデル更新）
   state.ver++;
   state.lastChanged = ev.changed; state.lastReveal = ev.reveal;
   state.lastAct = ev.type==='move' ? 'move' : (ev.gobble ? 'gobble' : 'drop');
@@ -1111,6 +1146,7 @@ function hostPass(p, auto){
 }
 function endByWin(winners){
   state.phase='end'; state.winners=winners; state.endReason='win'; state.ver++;
+  AB.recordResult(winners);                      // 宿敵記憶: 勝敗を相手プロファイルへ
   state.scores = computeScores(state.board);
   for(const p of state.players) p.score = state.scores[p.idx]||0;
   pushLog('4連成立！ 勝者: '+winners.map(i=>state.players[i].name).join(' / '));
@@ -1124,6 +1160,7 @@ function endByScore(reason){
   let max=-1; for(const p of state.players) max=Math.max(max,p.score);
   state.winners = state.players.filter(p=>p.score===max).map(p=>p.idx);
   state.endReason = reason; state.ver++;
+  AB.recordResult(state.winners);                // 宿敵記憶: 勝敗を相手プロファイルへ
   pushLog('得点判定 → 勝者: '+state.winners.map(i=>state.players[i].name).join(' / '));
   stopHostTimers();
   hostBroadcast(true);
@@ -1250,22 +1287,27 @@ function cpuApply(t, p, a){
   else if(a.t==='move'){ u[a.to]={f:0,o:u[a.from].o,z:u[a.from].z}; u[a.from]={f:0,o:null,z:-1}; }
   return u;
 }
-/* p視点の盤面評価: 自分の連ポテンシャル − 相手の脅威（最大脅威を重め） */
+/* p視点の盤面評価: 自分の連ポテンシャル − 相手の脅威（最大脅威を重め）
+   大駒(L/LL)の連は小駒で上書き不能＝崩せないため、サイズに応じて危険度を増幅する */
 function cpuEval(t, p){
   let my=0, oppSum=0, oppMax=0;
   for(const w of WINDOWS){
-    let owner=-2, cnt=0, dead=false;
+    let owner=-2, cnt=0, dead=false, wMaxZ=-1;
     for(const i of w){ const c=t[i];
       if(c.f){ dead=true; break; }
       if(c.o===null) continue;
-      if(owner===-2){ owner=c.o; cnt=1; }
-      else if(c.o===owner) cnt++;
+      if(owner===-2){ owner=c.o; cnt=1; wMaxZ=c.z; }
+      else if(c.o===owner){ cnt++; if(c.z>wMaxZ) wMaxZ=c.z; }
       else { dead=true; break; }
     }
     if(dead || owner===-2) continue;
     const val=CPU_PAT[cnt];
     if(owner===p) my+=val;
-    else { oppSum+=val; if(val>oppMax) oppMax=val; }
+    else {
+      // LL(z=3)連は上書き不能で対処困難→2倍、L(z=2)連→1.4倍に危険度増幅
+      const threat = val * (wMaxZ>=3 ? 2.0 : (wMaxZ>=2 ? 1.4 : 1.0));
+      oppSum+=threat; if(threat>oppMax) oppMax=threat;
+    }
   }
   return my - oppSum - 0.6*oppMax;
 }
@@ -1274,7 +1316,12 @@ function cpuCandidates(board, p, pl){
   const out=[];
   for(let i=0;i<NC;i++){
     const c=board[i]; if(c.f) continue;
-    if(c.s.length===0){ for(let z=0;z<SIZES;z++){ if(pl.hand[z]>0){ out.push({t:'drop',z,cell:i}); break; } } }      // 空きは最小駒で
+    if(c.s.length===0){
+      let minZ=-1;
+      for(let z=0;z<SIZES;z++){ if(pl.hand[z]>0){ minZ=z; out.push({t:'drop',z,cell:i}); break; } } // 空きは最小駒で
+      // LL(上書き不能)は「永続ブロック」としても候補に追加（必須層で自滅手は除外される）
+      if(pl.hand[SIZES-1]>0 && minZ>=0 && minZ<SIZES-1) out.push({t:'drop',z:SIZES-1,cell:i});
+    }
     else { const need=topZ(c); for(let z=need+1;z<SIZES;z++){ if(pl.hand[z]>0){ out.push({t:'drop',z,cell:i}); break; } } } // 上書きは最小可
   }
   for(let f=0;f<NC;f++){ if(topOwner(board[f])===p){ for(let to=0;to<NC;to++){ if(legalMove(board,p,f,to)) out.push({t:'move',from:f,to}); } } }
@@ -1304,43 +1351,208 @@ function bestReplyValue(t, q){
   for(const a of cands){ const u=cpuApply(t, q, a); const v=cpuEval(u, q); if(v>best){ best=v; if(best>=CPU_PAT[WINLEN]) break; } }
   return best===-Infinity?0:best;
 }
-/* レベル別 CPU 思考。
-   Lv1 やさしい : 即勝ち手だけ拾い、あとはランダム（初心者向け・崩しやすい）
-   Lv2 ふつう   : 1手読み評価（自分の連−相手の脅威）
-   Lv3 つよい   : 1手読み + 相手の即勝ちを強くブロック
-   Lv4 最強     : 2手読み（自手→相手の最善応手）でハメ手・両取りを回避（L-imiles Lv4 踏襲） */
+/* ===========================================================================
+   ADAPTIVE BRAIN (AB) — 適応型対戦AI。3層判断「必須／戦術／プレイヤー適応」の
+   ③を担う。相手モデル×人格×多様性で「互角候補群（戦術的にほぼ同値の手）」の
+   中だけを再順位付けし、必須・戦術の質（競技性の床）は決して落とさない。
+   観測は公開行動のみ・参照は最上段のみ＝人間と同じフェアネス。
+   永続: localStorage gobbl_rival_v1（相手名キーで対局横断の“宿敵”記憶）。
+   =========================================================================== */
+const AB = (function(){
+  const KEY='gobbl_rival_v1';
+  const CATS=['attack','block','gobble','move','develop'];
+  const PERSONAS=['counter','mirror','experimental','mixed'];
+  const PERSONA_JP={counter:'カウンター',mirror:'ミラー',experimental:'実験',mixed:'混合'};
+  const PERSONA_ICON={counter:'🛡',mirror:'🪞',experimental:'🧪',mixed:'🎭'};
+  let store=load(), game=null;
+  function load(){ try{ const o=JSON.parse(localStorage.getItem(KEY)||'null'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
+  function blank(){ return { n:0, cat:{attack:0,block:0,gobble:0,move:0,develop:0}, risk:0, agg:0, mob:0, repeat:0, lastCat:'', games:0, wins:0, losses:0, draws:0, lastPersona:'' }; }
+  function getProfile(name){ name=name||'プレイヤー'; if(!store[name]) store[name]=blank(); return store[name]; }
+  function favCat(prof){ if(prof.n<=0) return ''; let b='develop',bv=-1; for(const c of CATS){ if((prof.cat[c]||0)>bv){ bv=prof.cat[c]; b=c; } } return b; }
+
+  /* 手を1カテゴリへ分類（t0=着手前の最上段ボード）。精度より一貫性を優先。 */
+  function classify(t0, p, action){
+    if(action.t==='move') return 'move';
+    const cell=action.cell, prevOwner=t0[cell].o;
+    let blocks=false;
+    for(const wi of CELL_WINDOWS[cell]){ const w=WINDOWS[wi];
+      let oOwner=-2,oCnt=0,dead=false;
+      for(const i of w){ const c=t0[i]; if(c.f){dead=true;break;} if(c.o===null||c.o===p) continue;
+        if(oOwner===-2){oOwner=c.o;oCnt=1;} else if(c.o===oOwner)oCnt++; else {dead=true;break;} }
+      if(!dead && oOwner>=0 && oCnt>=2){ blocks=true; break; }
+    }
+    if(prevOwner!==null && prevOwner!==p) return blocks?'block':'gobble';   // 相手を上書き
+    if(blocks) return 'block';
+    for(const wi of CELL_WINDOWS[cell]){ const w=WINDOWS[wi];
+      let dead=false,my=0,opp=false;
+      for(const i of w){ const c=t0[i]; if(c.f){dead=true;break;} if(c.o===p)my++; else if(c.o!==null)opp=true; }
+      if(!dead && !opp && my>=1) return 'attack';                          // 自連を伸ばす
+    }
+    return 'develop';
+  }
+  function risky(t0,p,a){ if(a.t==='drop'){ const prev=t0[a.cell].o; if(prev!==null&&prev!==p) return true; if(a.z>=2) return true; } return false; }
+
+  function potential(idx){ const t=cpuTopBoard(state.board); let s=0;
+    for(const w of WINDOWS){ let owner=-2,cnt=0,dead=false;
+      for(const i of w){ const c=t[i]; if(c.f){dead=true;break;} if(c.o===null)continue;
+        if(owner===-2){owner=c.o;cnt=1;} else if(c.o===owner)cnt++; else {dead=true;break;} }
+      if(!dead&&owner===idx) s+=CPU_PAT[cnt]; } return s; }
+  function effectivePersona(seat, idx){
+    if(seat.persona!=='mixed') return seat.persona;
+    const my=potential(idx); let bestH=-1;
+    for(const pl of state.players){ if(pl.idx===idx||isCpuSeat(pl)) continue; const v=potential(pl.idx); if(v>bestH) bestH=v; }
+    if(bestH<0) for(const pl of state.players){ if(pl.idx===idx) continue; const v=potential(pl.idx); if(v>bestH) bestH=v; }
+    seat.sub = my < bestH-30 ? 'counter' : (my > bestH+30 ? 'mirror' : 'experimental');
+    return seat.sub;
+  }
+  function aiCatUsage(seat){ const u={attack:0,block:0,gobble:0,move:0,develop:0}, h=seat.divCat; if(!h.length) return u;
+    for(const c of h) u[c]=(u[c]||0)+1; for(const k in u) u[k]/=h.length; return u; }
+  function recent(arr,v,win){ let n=0,s=Math.max(0,arr.length-(win||5)); for(let i=s;i<arr.length;i++) if(arr[i]===v)n++; return n; }
+
+  /* 学習演出: 相手の反復と確信度で stance を昇格させる（実モデルに連動＝正直な演出） */
+  function updateStances(){ if(!game) return; const confident=game.prof.n>=4;
+    for(const idx in game.seats){ const seat=game.seats[idx], per=effectivePersona(seat,+idx); let st='観察';
+      if(!confident) st='観察';
+      else if(game.streak>=3) st = per==='mirror'?'模倣':(per==='experimental'?'実験':'対策');
+      else st = per==='counter'?'見切り':(per==='mirror'?'模倣':(per==='experimental'?'実験':'分析'));
+      seat.stance=st;
+    } }
+
+  function start(){
+    const human=state.players.find(pl=>!isCpuSeat(pl));
+    // 観戦モード(myPlayerIdx=-1)は人間なし → ダミー game を作るがプロフィール保存はしない
+    const isWatch = (Net.myPlayerIdx===-1);
+    const name=human?human.name:(isWatch?null:(Net.myName||'プレイヤー'));
+    const prof=name?getProfile(name):blank();
+    game={ name:name||'', prof, seats:{}, lastHumanCat:'', streak:0, _watch:isWatch };
+    const pool=PERSONAS.slice();
+    if(!isWatch && prof.lastPersona){ const k=pool.indexOf(prof.lastPersona); if(k>=0) pool.push(pool.splice(k,1)[0]); } // 前回人格を後ろへ＝ローテ
+    let pi=0, first='';
+    for(const pl of state.players){ if(!isCpuSeat(pl)) continue;
+      const persona=pool[pi%pool.length]; pi++; if(!first) first=persona;
+      game.seats[pl.idx]={ persona, stance:'観察', divCat:[], divCell:[], sub:'' };
+    }
+    if(!isWatch && first){ prof.lastPersona=first; save(); }
+    updateStances();
+  }
+
+  function observe(p, action, t0){ if(!game) return; const prof=game.prof;
+    const cat=classify(t0,p,action);
+    prof.n++; prof.cat[cat]=(prof.cat[cat]||0)+1;
+    if(cat==='move') prof.mob++;
+    if(cat==='attack'||cat==='gobble') prof.agg++;
+    if(risky(t0,p,action)) prof.risk++;
+    if(prof.lastCat===cat) prof.repeat++;
+    game.streak = (game.lastHumanCat===cat) ? game.streak+1 : 1;
+    game.lastHumanCat=cat; prof.lastCat=cat;
+    save(); updateStances();
+  }
+
+  /* 人格バイアス: 互角候補群の中の再順位付けのみ（群外＝明確に悪い手は選ばれない）。 */
+  function bias(seat, idx, t0, cand, candCat){ if(!game) return 0; const W=7.0; let b=0;
+    const per=effectivePersona(seat,idx), fav=favCat(game.prof);
+    if(per==='counter' && fav){
+      if(fav==='attack' && candCat==='block') b+=W;
+      else if(fav==='gobble' && (candCat==='move'||candCat==='develop')) b+=W;
+      else if(fav==='move' && (candCat==='attack'||candCat==='block')) b+=W*0.8;
+      else if(fav==='develop' && candCat==='attack') b+=W;
+      else if(fav==='block' && candCat==='attack') b+=W*0.7;
+      if(game.streak>=3 && fav==='attack' && candCat==='block') b+=W*0.6;   // 反復ほど鋭く封じる
+    } else if(per==='mirror' && fav){ if(candCat===fav) b+=W; }
+    else if(per==='experimental'){ const u=aiCatUsage(seat); b+=W*(1-(u[candCat]||0)); }
+    b -= 3.2*recent(seat.divCat, candCat, 5);                                // 多様性: 最近多用を減点
+    const cellId=cand.t==='drop'?cand.cell:cand.to; b -= 1.4*recent(seat.divCell, cellId, 6);
+    return b;
+  }
+  function surpriseEps(seat, idx, level){ const per=effectivePersona(seat,idx);
+    let e = per==='experimental'?0.34 : (per==='mixed'?0.18 : (per==='mirror'?0.12:0.14));
+    if(level>=4) e*=0.7; return e; }
+  function recordChoice(idx, cand, cat){ if(!game) return; const seat=game.seats[idx]; if(!seat) return;
+    seat.divCat.push(cat); if(seat.divCat.length>8) seat.divCat.shift();
+    const cellId=cand.t==='drop'?cand.cell:cand.to; seat.divCell.push(cellId); if(seat.divCell.length>10) seat.divCell.shift(); }
+  function recordResult(winners){ if(!game) return; if(game._watch) return;  // 観戦モードは戦績保存しない
+    const prof=game.prof; prof.games++;
+    const human=state.players.find(pl=>!isCpuSeat(pl)); if(human){
+      if(winners.includes(human.idx)){ if(winners.length>1) prof.draws++; else prof.wins++; } else prof.losses++; }
+    save(); }
+  function seatOf(idx){ return game && game.seats[idx]; }
+  function tag(idx){ const s=seatOf(idx); return s ? (PERSONA_ICON[s.persona]+' '+s.stance) : ''; }
+  function report(){ if(!game) return null; const prof=game.prof, fav=favCat(prof);
+    const favJp={attack:'攻撃的',block:'守備的',gobble:'賭け師',move:'機動派',develop:'構築派'}[fav]||'未知数';
+    return { name:game.name, fav, favJp, n:prof.n, games:prof.games, wins:prof.wins, losses:prof.losses, draws:prof.draws,
+      aggressive: prof.n?prof.agg/prof.n>0.5:false, risky: prof.n?prof.risk/prof.n>0.4:false,
+      seats: Object.keys(game.seats).map(i=>({ idx:+i, persona:game.seats[i].persona, personaJp:PERSONA_JP[game.seats[i].persona], stance:game.seats[i].stance })) }; }
+
+  function selftest(){ const out=[]; const ok=(n,c)=>out.push((c?'✓':'✗')+' '+n);
+    const mk=()=>{ const t=new Array(NC); for(let i=0;i<NC;i++) t[i]={f:0,o:null,z:-1}; return t; };
+    ok('move→move', classify(mk(),0,{t:'move',from:0,to:1})==='move');
+    const t1=mk(); t1[1]={f:0,o:0,z:0}; ok('自連を伸ばす→attack', classify(t1,0,{t:'drop',z:0,cell:2})==='attack');
+    const t2=mk(); t2[7]={f:0,o:1,z:0}; t2[8]={f:0,o:1,z:0}; ok('相手強窓へ→block', classify(t2,0,{t:'drop',z:0,cell:9})==='block');
+    const t3=mk(); t3[5]={f:0,o:1,z:0}; ok('相手を上書き→gobble', classify(t3,0,{t:'drop',z:1,cell:5})==='gobble');
+    const t4=mk(); ok('孤立配置→develop', classify(t4,0,{t:'drop',z:0,cell:14})==='develop');
+    ok('人格4種', PERSONAS.length===4); ok('カテゴリ5種', CATS.length===5);
+    return { pass: out.every(s=>s[0]==='✓'), out }; }
+
+  return { start, observe, bias, surpriseEps, recordChoice, recordResult, classify, tag, report, seatOf, selftest, CATS, PERSONA_JP };
+})();
+function abRecord(p,a,t0,seat,cat){ if(seat) AB.recordChoice(p, a, cat||AB.classify(t0,p,a)); }
+
+/* レベル別 CPU 思考 — 3層判断（必須／戦術／プレイヤー適応）。
+   ① 必須判断（学習非依存・競技性の床）: 即勝ち採用 → 相手に即勝ちを与える手を除外。
+   ② 戦術判断: cpuEval でレベル別採点し「互角候補群（最良からtau以内）」を抽出。
+   ③ プレイヤー適応: 互角候補群の中だけを 人格×多様性×驚き で再順位付け（群外は選ばない）。
+   Lv1=やさしい(即勝ち以外ランダム) / Lv2=1手 / Lv3=即勝ちブロック / Lv4=2手読み。 */
 function cpuPick(p, level){
   level = clamp((level|0)||DEF.cpuLevel, 1, 4);
   const board=state.board, pl=state.players[p];
   const cands=cpuCandidates(board, p, pl);
   if(!cands.length) return null;
   const t0=cpuTopBoard(board);
+  const seat=AB.seatOf(p);
 
-  // Lv1: 即勝ちは逃さず、それ以外はランダム
-  if(level===1){
-    const wins=cands.filter(a=>topHasWin(cpuApply(t0,p,a), p));
-    const pool = wins.length?wins:cands;
-    return pool[(Math.random()*pool.length)|0];
-  }
+  // ① 必須: 即勝ちは無条件で取る
+  const wins=cands.filter(a=>topHasWin(cpuApply(t0,p,a), p));
+  if(wins.length){ const a=wins[(Math.random()*wins.length)|0]; abRecord(p,a,t0,seat); return a; }
+  // Lv1: それ以外はランダム（初心者向け）。関係性記憶のため履歴だけは残す。
+  if(level===1){ const a=cands[(Math.random()*cands.length)|0]; abRecord(p,a,t0,seat); return a; }
 
-  const opp = nextSeat(p);
-  const replyW = level>=4 ? 1.0 : (level>=3 ? 0.85 : 0);   // 相手応手の重み
-  let best=[], bestScore=-Infinity;
+  const opp=nextSeat(p);
+  const replyW = level>=4 ? 1.0 : (level>=3 ? 0.85 : 0);
+  // ② 戦術採点（相手応手は全レベルで“即勝ち渡し”検出に使う）
+  const scored=[];
   for(const a of cands){
     const t=cpuApply(t0, p, a);
     let sc=cpuEval(t, p);
-    // 自分が即勝ちでないときだけ相手の応手を読む（Lv3=即勝ちブロック / Lv4=最善応手で減点）
-    if(replyW>0 && sc < CPU_PAT[WINLEN]*0.5){
-      sc -= bestReplyValue(t, opp) * replyW;
-    }
-    // 駒の節約 + 盤面進行: 小駒から消費(S<M<L)。拮抗時は無為な「移動」より配置を優先
-    // （手持ちが減り、無制限ラウンドでもいずれ全消費で終局する）。
-    if(a.t==='drop') sc -= a.z*2.0; else sc -= 5.5;
+    const reply=bestReplyValue(t, opp);
+    if(replyW>0 && sc < CPU_PAT[WINLEN]*0.5) sc -= reply*replyW;
+    if(a.t==='drop') sc -= a.z*2.0; else sc -= 5.5;        // 小駒優先・無為な移動を抑制
     sc += centerBias(a.t==='drop'?a.cell:a.to)*0.4;
-    if(sc>bestScore+1e-6){ bestScore=sc; best=[a]; }
-    else if(sc>bestScore-1e-6) best.push(a);
+    scored.push({ a, sc, lose: reply>=CPU_PAT[WINLEN] });
   }
-  return best[(Math.random()*best.length)|0] || cands[0];
+  // ① 必須: 相手に即勝ちを与える手は除外（安全手があるときのみ＝致命的ミス回避）
+  const safe=scored.filter(s=>!s.lose);
+  const base=safe.length?safe:scored;
+  let bestSc=-Infinity; for(const s of base) if(s.sc>bestSc) bestSc=s.sc;
+  // ② 互角候補群（tau以内）。鋭い局面では群が収束し personality は出ない＝正しく強い。
+  const tau = level<=2 ? 24 : (level===3 ? 14 : 9);
+  let pool=base.filter(s=> s.sc >= bestSc - tau); if(!pool.length) pool=base;
+
+  // ③ プレイヤー適応: 群の中だけ再順位付け（必須・戦術の質は不変）
+  if(seat && pool.length>1){
+    for(const s of pool){ s.cat=AB.classify(t0,p,s.a); s.fin=s.sc + AB.bias(seat, p, t0, s.a, s.cat); }
+    let chosen;
+    if(Math.random() < AB.surpriseEps(seat, p, level)){      // 驚き: 合理的だが普段選ばない手（自滅手は群に無い）
+      chosen=pool[(Math.random()*pool.length)|0];
+    } else {
+      let bf=-Infinity, bl=[]; for(const s of pool){ if(s.fin>bf+1e-6){bf=s.fin;bl=[s];} else if(s.fin>bf-1e-6) bl.push(s); }
+      chosen=bl[(Math.random()*bl.length)|0];
+    }
+    abRecord(p, chosen.a, t0, seat, chosen.cat); return chosen.a;
+  }
+  // 非適応フォールバック: 群から最良＋微ランダム
+  let bf=-Infinity, bl=[]; for(const s of pool){ if(s.sc>bf+1e-6){bf=s.sc;bl=[s];} else if(s.sc>bf-1e-6) bl.push(s); }
+  const a=(bl[(Math.random()*bl.length)|0]||base[0]).a; abRecord(p,a,t0,seat); return a;
 }
 
 /* ===========================================================================
@@ -1380,7 +1592,7 @@ function renderEndState(verChanged){
   $('g-hint').textContent='対戦終了 — 最終盤面はこのまま表示中';
   renderEnd();
   $('ov-end').classList.remove('hidden');
-  if(verChanged) Sound.play(view.winners && view.winners.includes(view.you) ? 'win' : 'lose');
+  if(verChanged && view.you!==-1) Sound.play(view.winners && view.winners.includes(view.you) ? 'win' : 'lose');
 }
 /* 直前の手の演出: 変化セルをポップ、公開セルをフラッシュ（CSSのみ・低負荷） */
 function applyMoveFx(){
@@ -1456,11 +1668,12 @@ function endWinCells(){
 }
 function renderTop(){
   const cur=view.players[view.cur];
-  $('g-turn').textContent = view.paused ? '一時停止中' : (myTurn() ? 'あなたの番' : (cur? cur.name+' の番' : '—'));
-  $('g-turn').style.color = view.paused ? 'var(--warn)' : (myTurn()? 'var(--good)' : 'var(--text)');
-  $('g-meta').textContent = `ラウンド ${view.round}/${view.rounds>0?view.rounds:'∞'}`;
-  // 自分の番だけ盤面フレーム/手番バナーを点滅（ポーズ中は止める）。毎描画で同期。
-  document.body.classList.toggle('is-my-turn', myTurn() && !view.paused);
+  const watch=(view.you===-1);
+  $('g-turn').textContent = view.paused ? '一時停止中' : (watch ? (cur?cur.name+' の番':'—') : (myTurn() ? 'あなたの番' : (cur? cur.name+' の番' : '—')));
+  $('g-turn').style.color = view.paused ? 'var(--warn)' : ((!watch && myTurn())? 'var(--good)' : 'var(--text)');
+  $('g-meta').textContent = (watch?'👁 観戦中　':'') + `ラウンド ${view.round}/${view.rounds>0?view.rounds:'∞'}`;
+  // 自分の番だけ盤面フレーム/手番バナーを点滅（ポーズ中・観戦中は止める）。毎描画で同期。
+  document.body.classList.toggle('is-my-turn', !watch && myTurn() && !view.paused);
 }
 function renderPlayers(){
   const box=$('g-players'); box.innerHTML='';
@@ -1468,8 +1681,9 @@ function renderPlayers(){
     const d=document.createElement('div'); d.className='pcard'+(p.idx===view.cur?' turn':'');
     const stTxt={me:'あなた',online:'接続',offline:'切断中',cpu:'CPU'}[p.state]||'';
     const handTxt = p.hand.map((c,z)=>SIZE_CHAR[z]+c).join(' ');
+    const aiTag = p.aiTag ? `<div class="aitag" title="このCPUの人格と、あなたへの構え">${esc(p.aiTag)}</div>` : '';
     d.innerHTML = `<div class="pn"><span class="chip" style="background:${PCOLORS[p.idx]}"></span>${esc(p.name)}</div>`+
-                  `<div class="hd">手:${handTxt}</div>`+
+                  `<div class="hd">手:${handTxt}</div>`+aiTag+
                   `<div class="st st-${p.state}">${stTxt}</div>`;
     box.appendChild(d);
   }
@@ -1504,12 +1718,26 @@ function renderBoard(){
       const pc=document.createElement('div'); pc.className=`pc z${t.z} p${t.o}`; pc.textContent=SIZE_CHAR[t.z];
       cell.appendChild(pc);
     }
+    // 終局の種明かし: 埋もれていた下層を小ピップで公開（下→上）。隠し情報の読みを事後に学べる。
+    if(view.phase==='end' && c.s.length>1){
+      const bw=document.createElement('div'); bw.className='buried';
+      for(let k=0;k<c.s.length-1;k++){ const sp=document.createElement('span'); sp.className='bp p'+c.s[k].o; sp.title=SIZE_CHAR[c.s[k].z]; bw.appendChild(sp); }
+      cell.appendChild(bw);
+    }
     cell.addEventListener('click', ()=>onCellClick(i));
     b.appendChild(cell);
   }
 }
 function renderHand(){
   const h=$('g-hand'); h.innerHTML='';
+  // 観戦モード: 手持ちUIは不要。代わりに観戦中バナーを表示。
+  if(view.you===-1){
+    const w=document.createElement('div');
+    w.style.cssText='width:100%;text-align:center;padding:10px 0 4px;color:var(--gold);font-weight:800;font-size:14px;letter-spacing:.06em;';
+    w.textContent='👁 観戦中';
+    h.appendChild(w);
+    return;
+  }
   const me=view.players[view.you]; const myColor=PCOLORS[view.you];
   for(let z=0;z<SIZES;z++){
     const hp=document.createElement('button'); hp.className='hp'+(sel.kind==='drop'&&sel.z===z?' sel':'');
@@ -1528,7 +1756,9 @@ function renderLog(){
 }
 function renderHint(){
   let msg='';
-  if(view.paused) msg='切断したプレイヤーの再接続を待っています…';
+  if(view.you===-1){
+    const cur=view.players[view.cur]; msg=`${cur?cur.name:'CPU'} が思考中…`;
+  } else if(view.paused) msg='切断したプレイヤーの再接続を待っています…';
   else if(!myTurn()) msg='相手の手番です…';
   else if(sel.kind==='drop') msg=`${SIZE_CHAR[sel.z]}駒: 置くマスをタップ（青枠が合法）`;
   else if(sel.kind==='move') msg='移動先をタップ（もう一度同じ駒で解除）';
@@ -1620,9 +1850,32 @@ function renderEnd(){
     tr.innerHTML=`<td><span class="chip" style="width:12px;height:12px;border-radius:3px;display:inline-block;background:${PCOLORS[p.idx]};margin-right:6px;"></span>${esc(p.name)}${view.winners.includes(p.idx)?' 👑':''}</td><td class="n">${p.score}</td>`;
     tb.appendChild(tr);
   }
+  renderRivalReport();
   // host / solo のみ「もう一度」可能
   $('e-again').style.display = isHostMode()?'':'none';
   $('e-wait').textContent = (Net.mode==='online-client')?'ホストの操作を待っています…':'';
+}
+/* 宿敵レポート: 適応AIの人格・今局の構え・あなたの累積戦績・検出された棋風を可視化（学習の読める化）。 */
+function renderRivalReport(){
+  const box=$('e-rival'); if(!box) return; box.innerHTML='';
+  // 観戦モードは人間がいないためレポート非表示
+  if(view && view.you===-1){ box.style.display='none'; return; }
+  const r = (typeof AB!=='undefined') ? AB.report() : null;
+  if(!r || !r.seats || !r.seats.length){ box.style.display='none'; return; }
+  box.style.display='';
+  const rec = r.games>0 ? `通算 ${r.games}戦 <b>${r.wins}勝${r.losses}敗</b>${r.draws?`${r.draws}分`:''}` : '初対戦';
+  const traits=[]; if(r.aggressive && r.fav!=='attack') traits.push('攻撃的'); if(r.risky) traits.push('大胆');
+  const styleTxt = r.n>=4 ? `あなたの棋風: <b>${r.favJp}</b>${traits.length?'（'+traits.join('・')+'）':''}` : 'あなたの棋風: 観察中…';
+  let html = `<div class="rv-head">🎭 宿敵レポート — ${esc(r.name)}</div>`+
+             `<div class="rv-sub">${rec}　／　${styleTxt}</div>`;
+  for(const s of r.seats){
+    const p=view.players.find(x=>x.idx===s.idx); const nm=p?p.name:('CPU'+(s.idx+1));
+    html += `<div class="rv-row"><span class="chip" style="background:${PCOLORS[s.idx]}"></span>`+
+            `<span class="rv-nm">${esc(nm)}</span>`+
+            `<span class="rv-per">${esc(s.personaJp)}型</span>`+
+            `<span class="rv-st">${esc(s.stance)}</span></div>`;
+  }
+  box.innerHTML=html;
 }
 $('e-again').addEventListener('click', ()=>{ if(isHostMode()){ Sound.resume(); $('ov-end').classList.add('hidden'); hostStartGame(state.cfg); startHostTimers(); } });
 $('e-leave').addEventListener('click', ()=>{ confirmLeaveToTitle(); });
@@ -2158,16 +2411,17 @@ function onSettingsChange(){
 function showLobby(){
   showScreen('lobby');
   const solo=(Net.mode==='solo');
+  const watch=(solo && Net.myPlayerIdx===-1);
   const host=isHostMode();
   $('lb-roomlbl').style.display = solo ? 'none' : '';
-  $('lb-room').textContent = solo ? 'CPU対戦（オフライン）' : Net.roomCode;
-  $('lb-role').textContent = solo ? '部屋なしで CPU と対戦' : (Net.mode==='online-host'?'あなたはホスト':'ゲスト');
+  $('lb-room').textContent = solo ? (watch ? 'CPU観戦（オフライン）' : 'CPU対戦（オフライン）') : Net.roomCode;
+  $('lb-role').textContent = solo ? (watch ? '全席 CPU で自動進行・観戦モード' : '部屋なしで CPU と対戦') : (Net.mode==='online-host'?'あなたはホスト':'ゲスト');
   $('lb-settings').style.opacity=host?'1':'.6';
   for(const id of SETTING_IDS) $(id).disabled=!host;
   $('lb-start').style.display=host?'':'none';
-  $('lb-start').textContent = solo ? '対戦スタート' : 'ゲーム開始';
+  $('lb-start').textContent = watch ? '観戦スタート' : (solo ? '対戦スタート' : 'ゲーム開始');
   $('lb-wait').textContent=host?'':'ホストの開始を待っています…';
-  document.querySelector('#screen-lobby h1').textContent = solo ? 'CPU対戦の設定' : '待機ロビー';
+  document.querySelector('#screen-lobby h1').textContent = watch ? 'CPU vs CPU 観戦の設定' : (solo ? 'CPU対戦の設定' : '待機ロビー');
   renderLobby();
 }
 function renderLobby(){
@@ -2177,6 +2431,7 @@ function renderLobby(){
     $('cf-players').value=cfg.numPlayers; $('cf-rounds').value=cfg.rounds; $('cf-time').value=cfg.turnTime; $('cf-cpu').value=cfg.cpuLevel||DEF.cpuLevel;
   }
   const solo=(Net.mode==='solo');
+  const watch=(solo && Net.myPlayerIdx===-1);
   const seats=Net.hostPlayers.length?Net.hostPlayers:(Net._clientSeats||[]);
   const box=$('lb-seats'); box.innerHTML='';
   const n=cfg.numPlayers;
@@ -2191,11 +2446,14 @@ function renderLobby(){
   }
   const cpuN=Math.max(0,n-seats.length);
   const humanN=Math.min(seats.length,n);
-  $('lb-count').textContent=`(${humanN}/${n}人 + CPU${cpuN})`;
-  const bn=$('lb-bannernum'); if(bn) bn.textContent = solo ? `あなた vs CPU${cpuN}` : `${humanN} / ${n} 人${cpuN>0?` ＋CPU${cpuN}`:''}`;
-  $('lb-fillnote').textContent = solo
-    ? `あなた 1人 + CPU ${cpuN}体 で対戦します。`
-    : (cpuN>0?`空席 ${cpuN} は CPU が担当します。`:'全席が人間です。');
+  $('lb-count').textContent= watch ? `(全${cpuN}席 CPU)` : `(${humanN}/${n}人 + CPU${cpuN})`;
+  const bn=$('lb-bannernum');
+  if(bn) bn.textContent = watch ? `CPU${cpuN} 対戦 — 観戦` : (solo ? `あなた vs CPU${cpuN}` : `${humanN} / ${n} 人${cpuN>0?` ＋CPU${cpuN}`:''}` );
+  $('lb-fillnote').textContent = watch
+    ? `CPU ${cpuN}体のみで自動対戦します。あなたは盤面を観戦できます。`
+    : (solo
+      ? `あなた 1人 + CPU ${cpuN}体 で対戦します。各CPUは人格（カウンター/ミラー/実験/混合）を持ち、あなたの棋風を学んで毎回ちがう相手になります。`
+      : (cpuN>0?`空席 ${cpuN} は CPU が担当します。CPUはあなたの棋風を学習する適応型です。`:'全席が人間です。'));
 }
 function renderClientLobby(msg){
   Net._clientSeats=msg.players.slice();
@@ -2229,6 +2487,18 @@ function soloEnter(){
   showLobby();
 }
 
+/* CPU vs CPU 観戦モード — 全席が CPU。myPlayerIdx=-1 で人間なし・観戦のみ */
+function watchEnter(){
+  if(Net.mode!=='none') netLeave();
+  Net._intentional=false;
+  Net.mode='solo'; Net.roomCode=''; Net.myName=''; Net.myPlayerIdx=-1;
+  Net.cfg=readSettings();
+  Net.hostPlayers=[];           // 人間席なし → 全席 CPU
+  state=null; view=null; clearSel();
+  setNet('ok','CPU観戦');
+  showLobby();
+}
+
 /* ===========================================================================
    TITLE actions + countdown ticker
    =========================================================================== */
@@ -2238,6 +2508,7 @@ function roomVal(){ const v=$('t-room').value.trim(); if(v){ try{ localStorage.s
 let _connClickAt=0;
 function connDebounced(){ const now=Date.now(); if(now-_connClickAt<1200) return true; _connClickAt=now; return false; }
 $('t-solo').addEventListener('click', ()=>{ nameVal(); soloEnter(); });
+$('t-watch').addEventListener('click', ()=>{ watchEnter(); });
 $('t-host').addEventListener('click', ()=>{ if(connDebounced()) return; const r=roomVal(); if(!r){ $('t-err').textContent='合言葉を入力してください'; return; } _silentNetReset(); netHost({code:r, name:nameVal()}); });
 $('t-join').addEventListener('click', ()=>{ if(connDebounced()) return; const r=roomVal(); if(!r){ $('t-err').textContent='合言葉を入力してください'; return; } _silentNetReset(); netJoin({code:r, name:nameVal()}); });
 
